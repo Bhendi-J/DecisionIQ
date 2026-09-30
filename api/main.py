@@ -2,7 +2,7 @@ from fastapi import FastAPI
 import joblib
 from pathlib import Path
 from pydantic import BaseModel
-
+import numpy as np
 
 app = FastAPI(title="DecisionIQ Security Anomaly API")
 
@@ -11,6 +11,10 @@ MODEL_PATH = Path(__file__).parent.parent / "outputs" / "isolation_forest.joblib
 
 # Load trained model
 model = joblib.load(MODEL_PATH)
+K = 15
+
+def to_anomaly_score(decision):
+    return 1 / (1 + np.exp(K * np.asarray(decision)))
 
 
 @app.get("/health")
@@ -45,7 +49,11 @@ def score_login(login: LoginData):
 
     is_anomaly = prediction == -1
 
+    anomaly_score = float(to_anomaly_score(decision_score))
+    risk_score = round(anomaly_score * 100)
+
     return {
         "is_anomaly": bool(is_anomaly),
-        "decision_score": float(decision_score)
+        "anomaly_score": round(anomaly_score, 2),
+        "risk_score": risk_score
     }
