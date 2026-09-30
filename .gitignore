@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Large model artifacts (>100MB blocked by GitHub)
+model/
+
+logs/
