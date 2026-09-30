@@ -2,101 +2,161 @@
 
 The **Finance Service** is a core ML microservice of **DecisionIQ**, an AI-powered business intelligence dashboard for SMEs.
 
-It is responsible for:
-1. **Prophet Revenue Forecasting**: 90-day time-series forecasting using retail transaction data as a sales/cash-inflow proxy.
-2. **XGBoost Cash-Flow Stress Classification**: Supervised ML predicting next month's SME cash-flow stress probability (`cashflow_stress_next_month`).
-3. **SHAP Explanations**: Mathematical feature attribution identifying top contributors driving financial risk.
-4. **Risk Aggregation Engine**: Fault-tolerant composite scoring combining Finance Risk and Security Risk.
-5. **What-If Simulation Engine**: Pure in-memory financial recomputation testing hypothetical business scenario changes without mutating storage.
+It provides a **multi-model financial intelligence engine** delivering revenue forecasting, cash-flow stress risk prediction, SHAP explainability, rule-based early warning signals, and real-time What-If scenario simulations.
 
 ---
 
-## 1. Project Architecture & Control Flow
+## 1. Project Architecture & Capability Stack
 
 ```text
-React Frontend
-      ↓
-API Gateway
-      ↓
-Finance Service (FastAPI :8001)
-      ↓
- ┌───────────────┬───────────────────┐
- ↓               ↓                   ↓
-Prophet       XGBoost              SHAP
-(Forecast)   (Cash-Stress Risk)  (Explanations)
-                 ↓
-         Risk Aggregation
-                 ↓
-     Composite Business Health
+               React Frontend / Dashboard
+                           │
+                      API Gateway
+                           │
+             Finance Service (FastAPI :8001)
+                           │
+    ┌──────────────────────┼──────────────────────┐
+    ▼                      ▼                      ▼
+Forecasting Layer   Classification Layer   Explainability Layer
+(Prophet / Ridge)    (XGBoost Risk)         (SHAP Explanations)
+    │                      │                      │
+    └──────────────────────┼──────────────────────┘
+                           ▼
+            Rule Engine & Early Warnings
+                           ▼
+          Unified Endpoint & What-If Engine
+```
+
+### Core Services & Components:
+1. **Revenue Forecasting Layer**: Time-series revenue/cash-inflow forecasting using Prophet (with fallback to Ridge-Fourier). Evaluated across UCI Online Retail, Walmart, and Rossmann datasets.
+2. **Cash-Flow Stress Classifier**: XGBoost model predicting next-month SME distress risk (`cashflow_stress_next_month`). Benchmarked against Taiwanese and Polish Corporate Bankruptcy datasets.
+3. **SHAP Explainability Engine**: Calculates directional impact (positive/negative) for top features driving risk probabilities.
+4. **Early Warning Rule Engine**: Calculates rule-based financial indicators:
+   - Cash Runway (months)
+   - Monthly Net Burn Rate
+   - Debt Service Coverage Ratio (DSCR)
+   - Receivables Aging Risk Index
+5. **What-If Simulation Engine**: In-memory scenario simulator (e.g. OPEX +15%, Revenue -10%) that recomputes modified risk without mutating persistent storage.
+6. **Unified Service Endpoint (`/finance/unified`)**: Combines forecast, cash-stress risk, SHAP explanations, early warning signals, and composite business health into a single payload.
+
+---
+
+## 2. Directory Structure
+
+```text
+decisioniq-finance-service/
+├── app/
+│   ├── main.py                  # FastAPI application entrypoint & routing
+│   ├── models/                  # ML inference wrapper classes (ProphetForecaster, XGBoostRiskModel)
+│   ├── schemas/                 # Pydantic request/response data validation models
+│   ├── services/                # Early warning engine, SHAP calculator, What-If simulator
+│   └── routers/                 # API endpoint routers (/finance/unified, /finance/what-if, etc.)
+├── models/                      # Saved trained binary models (.pkl)
+│   ├── prophet/
+│   │   └── prophet_model.pkl
+│   └── xgboost/
+│       └── xgboost_risk.pkl
+├── scripts/                     # Standalone training scripts
+│   ├── train_prophet.py
+│   └── train_xgboost.py
+├── run_full_eval.py             # Complete multi-model training & evaluation pipeline script
+├── requirements.txt             # Service dependencies
+└── README.md                    # Project documentation
 ```
 
 ---
 
-## 2. Dataset Strategy & Data Leakage Prevention
+## 3. Dataset Strategy & Data Leakage Prevention
 
-| Model | Primary Dataset | Proxy / Target | Data Leakage Controls |
+| Layer | Primary Dataset | Purpose / Target | Data Leakage Controls |
 | :--- | :--- | :--- | :--- |
-| **Prophet** | `Datasets/online+retail/Online Retail.xlsx` | `Revenue = Quantity × UnitPrice` aggregated daily (Retail sales proxy) | Chronological time-series splitting (no random shuffling). |
-| **XGBoost** | `Datasets/archive/small_business_cashflow.csv` (Prototype/Synthetic Dataset) | Target: `cashflow_stress_next_month` (Supervised Target) | Features represent Month N financials predicting Month N+1 risk. `record_id` excluded. |
+| **Forecasting** | `UCI Online Retail` | Daily revenue aggregation (`Quantity * UnitPrice`) for 90-day time-series forecasting. | Chronological train/test split (last 90 days held out for evaluation). No random shuffling. |
+| **Forecasting Benchmarks** | `Walmart Sales`, `Rossmann Sales` | Benchmark forecasting performance across diverse retail environments. | Chronological evaluation per store/time-series. |
+| **Cash-Stress Risk** | `Small Business Cashflow` | SME financial features predicting `cashflow_stress_next_month`. | Features represent Month N financials predicting Month N+1 risk. `record_id` excluded. |
+| **Distress Benchmarks** | `Taiwanese Bankruptcy`, `Polish Companies` | External financial distress benchmarks to test XGBoost classification capacity. | Stratified 80/20 train/test split. |
 
 ---
 
-## 3. Features & Business Logic
+## 4. Setup & Installation Guide
 
-### Primary Features
-- `employees`: Company headcount
-- `revenue_usd`: Monthly revenue in USD
-- `opex_usd`: Operating expenditure in USD
-- `accounts_receivable_days`: Average collection cycle
-- `inventory_days`: Average inventory holding cycle
-- `loan_balance_usd`: Outstanding debt balance
-- `owner_injections_usd`: Owner capital injections
-- `sector`: One-hot encoded categorical variable (`Retail`, `Services`, `Manufacturing`, `Healthcare`, `Logistics`, `Hospitality`)
+### Step 1: Prerequisites
+- Python 3.9+ (Python 3.10 to 3.12 recommended)
+- Git
 
-### Engineered Features
-1. `profit` = `revenue_usd - opex_usd` (Operating profitability proxy)
-2. `expense_ratio` = `opex_usd / (revenue_usd + 1e-5)` (Operational burn rate)
-3. `debt_to_revenue_ratio` = `loan_balance_usd / (revenue_usd + 1e-5)` (Leverage burden)
-4. `injection_reliance` = `owner_injections_usd / (revenue_usd + 1e-5)` (External capital dependence)
-5. `cash_cycle_risk` = `accounts_receivable_days + inventory_days` (Working capital conversion cycle length)
-
----
-
-## 4. Installation & Quickstart
-
-### Step 1: Install Dependencies
+### Step 2: Clone & Navigate to Service Directory
 ```bash
-cd decisioniq-finance-service
+git clone <repository-url>
+cd DecisionIQ/decisioniq-finance-service
+```
+
+### Step 3: Create & Activate Virtual Environment
+**On Windows (PowerShell):**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+**On macOS / Linux:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### Step 4: Install Dependencies
+```bash
 pip install -r requirements.txt
 ```
 
-### Step 2: Offline Model Training
-Run offline training scripts to generate model binaries:
+---
+
+## 5. Training & Evaluation Pipeline
+
+### Option A: Run End-to-End Multi-Model Pipeline (Recommended)
+To train all forecasting and classification models, generate benchmark evaluation metrics (MAE, RMSE, MAPE, ROC-AUC, F1), run SHAP analysis, and execute What-If tests in one step:
+
 ```bash
-# Train Prophet 90-Day Forecaster
+python run_full_eval.py
+```
+
+This updates model artifacts in `models/prophet/prophet_model.pkl` and `models/xgboost/xgboost_risk.pkl`.
+
+### Option B: Run Standalone Training Scripts
+```bash
+# Train Prophet Forecaster
 python scripts/train_prophet.py
 
 # Train XGBoost Cash-Flow Risk Classifier
 python scripts/train_xgboost.py
 ```
 
-Model binaries will be saved to:
-- `models/prophet/prophet_model.pkl`
-- `models/xgboost/xgboost_risk.pkl`
+---
 
-### Step 3: Run FastAPI Microservice
+## 6. Running the FastAPI Server
+
+Start the live microservice on port `8001`:
+
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
+Server logs will confirm:
+```text
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+```
+
 ---
 
-## 5. API Endpoints & Testing
+## 7. API Endpoints & Usage
 
-The service exposes interactive Swagger docs at `http://localhost:8001/docs`.
+Interactive Swagger API documentation is available at:
+👉 **`http://localhost:8001/docs`**
 
 ### 1. Health Check
 `GET /health`
+```bash
+curl http://localhost:8001/health
+```
+**Response:**
 ```json
 {
   "status": "healthy",
@@ -105,44 +165,58 @@ The service exposes interactive Swagger docs at `http://localhost:8001/docs`.
 }
 ```
 
-### 2. Financial Summary
-`GET /finance/summary?security_score=0.40`
+### 2. Unified Finance Assessment
+`POST /finance/unified`
 
-### 3. Risk Prediction
-`POST /finance/predict`
+**Sample Request Payload:**
 ```json
 {
   "sector": "Retail",
-  "employees": 12,
-  "revenue_usd": 45000,
-  "opex_usd": 38000,
-  "accounts_receivable_days": 55,
-  "inventory_days": 30,
-  "loan_balance_usd": 25000,
-  "owner_injections_usd": 2000
+  "monthly_revenue": 50000.0,
+  "monthly_opex": 42000.0,
+  "cash_buffer": 15000.0,
+  "debt_service": 3000.0,
+  "receivables_aging_days": 45.0,
+  "revenue_growth_rate": -0.05
 }
 ```
 
-### 4. What-If Simulation
-`POST /finance/simulate?security_score=0.40`
+**PowerShell Command:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8001/finance/unified" -Method POST -Headers @{"Content-Type"="application/json"} -Body '{
+  "sector": "Retail",
+  "monthly_revenue": 50000.0,
+  "monthly_opex": 42000.0,
+  "cash_buffer": 15000.0,
+  "debt_service": 3000.0,
+  "receivables_aging_days": 45.0,
+  "revenue_growth_rate": -0.05
+}'
+```
+
+### 3. What-If Simulation
+`POST /finance/what-if`
+
+**Sample Request Payload:**
 ```json
 {
-  "expenses_change_pct": 15.0,
-  "revenue_change_pct": -10.0,
-  "receivable_days_change": 10.0,
-  "loan_balance_change_pct": 0.0
+  "current_data": {
+    "sector": "Retail",
+    "monthly_revenue": 50000.0,
+    "monthly_opex": 42000.0,
+    "cash_buffer": 15000.0,
+    "debt_service": 3000.0,
+    "receivables_aging_days": 45.0,
+    "revenue_growth_rate": -0.05
+  },
+  "opex_change_pct": 15.0
 }
 ```
 
 ---
 
-## 6. Evaluation Strategy & Metrics
+## 8. Development Guidelines & Best Practices
 
-- **Prophet Forecaster**: Evaluated on unseen 90-day historical window. Metrics tracked: MAE, RMSE, MAPE.
-- **XGBoost Classifier**: Evaluated on unseen 20% chronological test split. Class imbalance (~83% no-stress vs 17% stress) handled via `scale_pos_weight`. Metrics tracked: Precision, Recall, F1-Score, ROC-AUC, Confusion Matrix.
-
----
-
-## 7. Known Limitations
-- The Online Retail dataset represents transaction sales, acting as a proxy for revenue / cash inflow. It does not contain actual SME cash outflow line items.
-- The What-If simulation recomputes financial risk in-memory and does not alter long-term historical records.
+- **Adding New Features**: When modifying feature schemas, ensure both `app/schemas/finance_schema.py` and `app/models/xgboost_risk.py` feature engineering functions remain synchronized.
+- **Model Storage**: Do not commit large uncompressed dataset dumps; commit only trained binary models in `models/` if required.
+- **Data Safety**: Always ensure time-series splits remain strictly chronological during forecasting evaluations to prevent data leakage.
