@@ -188,13 +188,21 @@ The clean source archive excludes virtual environments, installed JavaScript dep
 
 ## 10. Remaining work and recommended sequence
 
-1. Review the interface and demonstration story using sample data and one uploaded sales history.
-2. Obtain the contributor's complete trained phishing model/tokenizer and evaluate it on held-out examples.
-3. Decide whether LLM processing stays local or uses an external provider, what fields may leave the system, and how consent, retention, and logging will work.
-4. If adding GenAI mapping, evaluate ambiguous schemas and require confirmation before transformations affect stored observations.
-5. Before using real organizations, add email ownership verification, password recovery, and optional MFA; enforce retention policies and establish secure deployment and backups. Account roles and admin restrictions on legacy endpoints are now implemented.
-6. Introduce a durable worker/job queue and restart recovery for processing. Current jobs run in the backend process and are not a production-grade unattended processing service.
-7. Evaluate forecasts over multiple time windows and relevant datasets. Introduce per-company classifiers only when there are enough meaningful labeled outcomes; add candidate registration, comparison, controlled promotion, and rollback before automatic redeployment.
+**Status updated after the account access upgrade, 25 October 2026.** The original list mixed implementation work, user review, outside artifacts, and privacy decisions. Adding authentication completed part of that list; it did not complete every item.
+
+| Original item | Current status and remaining work |
+| --- | --- |
+| 1. Review the interface and demonstration story | **Automated engineering checks completed; user review pending.** Browser tests exercise public sample switching and uploading/processing a separate sales history through forecasting. The project team still needs to review the actual presentation and confirm that the interface tells the intended story. |
+| 2. Supply and evaluate the phishing model | **Adapter implemented; trained model still missing.** Obtain the contributor's complete saved model/tokenizer and evaluate it on held-out labeled emails. Temporary adapter fixtures do not establish phishing accuracy. Other services remain usable. |
+| 3. Decide the LLM privacy boundary | **Decision pending; external LLM processing disabled.** The current application sends no uploads to an LLM and does not fine-tune a shared LLM. Agree local versus external inference, allowed fields, consent, retention, and logging before enabling a provider. Public availability alone does not establish that data is anonymous or licensed for every use. |
+| 4. Add evaluated GenAI schema assistance | **Manual/rule-based mapping and confirmation implemented; GenAI assistance pending.** Alias suggestions, explicit date/decimal conventions, validation, and user confirmation already work. A future LLM should only propose mappings; ambiguous cases need review before validated transformations affect stored records. |
+| 5. Strengthen access and deployment for real organizations | **Account access portion completed; operational work remains.** Registration, login/logout, company memberships, owner/member/admin permissions, and admin restrictions on legacy endpoints are implemented. Email verification, password recovery, optional MFA, retention/deletion controls, secure deployment, backup/restore procedures, and organization identity verification remain incomplete. |
+| 6. Make processing durable across restarts | **Pending.** Accepted batches and sales records persist in SQLite, but background jobs run in the web process. Work interrupted by a restart is not automatically recovered. Add persisted job claims/status, retries, stale-job recovery, idempotent execution, and a worker that can resume accepted jobs independently of web requests. |
+| 7. Broaden evaluation and control model promotion | **Initial evaluation implemented; broader evaluation and model lifecycle pending.** The sales service compares Prophet with a weekly baseline on one final 28-day holdout. Add evaluation over several time windows and relevant sources, retain evaluation reports and model versions, and support controlled promotion/rollback. Per-company XGBoost/Random Forest classifiers require meaningful labeled outcomes before training or deployment can be justified. |
+
+For the college demonstration, the next implementation priority is **item 6**, followed by the multi-window forecast evaluation part of **item 7**. These can be developed locally without selecting an LLM provider. Continue team review under item 1 and obtain the phishing artifact in parallel when it is available. Keep GenAI disabled until item 3 is settled; item 4 can then build on the working manual pipeline.
+
+Before using real company records, complete the remaining identity, retention, deployment, and backup work under item 5. This is a separate readiness requirement from demonstrating the current public-data application.
 
 ## 11. Account access upgrade
 
