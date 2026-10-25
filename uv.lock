@@ -373,7 +373,7 @@ wheels = [
 ]
 
 [[package]]
-name = "decisioniq"
+name = "foresight"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [

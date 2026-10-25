@@ -1,1 +1,1 @@
-"""DecisionIQ's shared API and orchestration layer."""
+"""ForeSight's shared API and orchestration layer."""

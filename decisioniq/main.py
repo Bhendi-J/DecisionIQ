@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DecisionIQ",
+    title="ForeSight",
     description="Finance, login anomaly detection, and email phishing analysis through one API.",
     version="1.0.0",
     lifespan=lifespan,

@@ -1,5 +1,5 @@
 """
-What-If Financial Simulation Engine for DecisionIQ.
+What-If Financial Simulation Engine for ForeSight.
 
 CRITICAL ARCHITECTURAL CONSTRAINTS:
 --------------------------------------------------------------------------------

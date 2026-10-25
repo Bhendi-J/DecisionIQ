@@ -1,5 +1,5 @@
 """
-Feature Engineering Module for DecisionIQ Finance Service.
+Feature Engineering Module for ForeSight Finance Service.
 
 DOCUMENTATION OF ENGINEERED FEATURES:
 --------------------------------------------------------------------------------

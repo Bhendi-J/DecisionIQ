@@ -1,4 +1,4 @@
-# DecisionIQ demonstration scope
+# ForeSight demonstration scope
 
 This records the agreed requirements and implementation boundaries as of October 25, 2026. The local dashboard implements sales ingestion/analysis, independent security signals, company-scoped demo workspaces, and in-app reporting reminders. Items described as future capabilities remain outside the current demonstration.
 
@@ -105,7 +105,7 @@ Use in-app notifications first. Cadence defaults to 24 hours and is configurable
 
 ## Sources
 
-- User's DecisionIQ Risk Review deck, especially architecture slide 6 and prototype screenshot slide 8.
+- User's original DecisionIQ Risk Review deck, especially architecture slide 6 and prototype screenshot slide 8.
 - UCI Online Retail: https://archive.ics.uci.edu/dataset/352/online%2Bretail
 - IAS 7 overview, distinguishing cash movements from profit/loss: https://www.ifrs.org/issued-standards/list-of-standards/ias-7-statement-of-cash-flows/
 - Prophet historical forecast evaluation: https://facebook.github.io/prophet/docs/diagnostics.html

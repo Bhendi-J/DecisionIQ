@@ -582,7 +582,7 @@ export function DataHub(props: Props) {
       setError('Clipboard access is unavailable. Select and copy the text manually.');
     }
   }
-  const example = `curl ${window.location.origin}/api/intake/sales \\\n  -H "X-API-Key: $DECISIONIQ_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"currency":"${d.company.currency}","records":[{"record_id":"order-001","date":"2026-10-01","product":"Example","units":3,"sales":150}]}'`;
+  const example = `curl ${window.location.origin}/api/intake/sales \\\n  -H "X-API-Key: $FORESIGHT_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"currency":"${d.company.currency}","records":[{"record_id":"order-001","date":"2026-10-01","product":"Example","units":3,"sales":150}]}'`;
   return (
     <>
       {error && <ErrorBox>{error}</ErrorBox>}
@@ -1138,7 +1138,7 @@ export function Security(props: Props) {
 export function Insights({ data: d, toast }: Props) {
   function exportReport() {
     const text =
-      `${d.company.name} — DecisionIQ evidence summary\nSource: ${d.company.source}\nAnalysis cutoff: ${d.data_end || 'No sales history'}\nCurrency: ${d.company.currency}\nNarration: deterministic evidence template; no external LLM\n\n` +
+      `${d.company.name} — ForeSight evidence summary\nSource: ${d.company.source}\nAnalysis cutoff: ${d.data_end || 'No sales history'}\nCurrency: ${d.company.currency}\nNarration: deterministic evidence template; no external LLM\n\n` +
       d.insights
         .map((item) => `${item.title}\n${item.body}\nEvidence: ${item.source}\n`)
         .join('\n');

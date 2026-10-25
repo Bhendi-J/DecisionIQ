@@ -1,5 +1,5 @@
 """
-XGBoost Cash-Flow Stress Risk Model for DecisionIQ Finance Service.
+XGBoost Cash-Flow Stress Risk Model for ForeSight Finance Service.
 
 MODEL CONCEPTS & RULES:
 --------------------------------------------------------------------------------

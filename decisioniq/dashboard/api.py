@@ -503,5 +503,5 @@ def template(company: Company):
         + company["currency"]
         + "\n",
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="decisioniq-sales-template.csv"'},
+        headers={"Content-Disposition": 'attachment; filename="foresight-sales-template.csv"'},
     )

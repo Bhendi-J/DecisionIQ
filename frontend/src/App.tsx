@@ -245,7 +245,7 @@ export default function App() {
             <i />
           </span>
           <span>
-            Decision<span>IQ</span>
+            Fore<span>Sight</span>
             <small>BUSINESS INTELLIGENCE</small>
           </span>
         </a>
@@ -257,7 +257,7 @@ export default function App() {
             onClick={() => setWorkspaceMenu(!workspaceMenu)}
             disabled={busy}
           >
-            <span className="workspace-avatar">{data?.company.initials || 'DI'}</span>
+            <span className="workspace-avatar">{data?.company.initials || 'FS'}</span>
             <span>
               <strong>{data?.company.name || 'Your workspace'}</strong>
               <small>Demo workspace</small>
@@ -387,7 +387,7 @@ export default function App() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {data?.company.name.toUpperCase() || 'DECISIONIQ'} <span>/</span> BUSINESS
+                {data?.company.name.toUpperCase() || 'FORESIGHT'} <span>/</span> BUSINESS
                 INTELLIGENCE
               </p>
               <h1>
@@ -487,7 +487,7 @@ export default function App() {
               <Empty
                 icon={Database}
                 title="The workspace is unavailable"
-                detail="Check that the DecisionIQ backend is running, then reload this page."
+                detail="Check that the ForeSight backend is running, then reload this page."
                 action={
                   <button className="button secondary" onClick={() => location.reload()}>
                     <RefreshCw size={15} />
@@ -502,7 +502,7 @@ export default function App() {
             </div>
           )}
           <footer className="main-footer">
-            <span className="footer-wordmark">DecisionIQ</span>
+            <span className="footer-wordmark">ForeSight</span>
             <span>
               {data?.company.source_kind === 'public'
                 ? 'Historical public data · fictional sample workspace'

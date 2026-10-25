@@ -1,13 +1,14 @@
-# DecisionIQ — Integration and Implementation Report
+# ForeSight — Integration and Implementation Report
 
-**Prepared:** 25 October 2026  
-**Purpose:** Explain what was built, why it was built this way, how it works, and its current limits.  
-**Implementation reviewed:** `f28b37c`, following service integration commit `0e157a1`.  
+**Prepared:** 25 October 2026
+**Purpose:** Explain what was built, why it was built this way, how it works, and its current limits.
+**Implementation reviewed:** `f28b37c`, following service integration commit `0e157a1`.
 **Delivery:** Local college demonstration on `integration/unified-services`.
+**Product name:** ForeSight; renamed from DecisionIQ after the implementation review.
 
 ## 1. Result delivered
 
-DecisionIQ now has one working React dashboard and one FastAPI application integrating the finance, login-anomaly, and phishing service code. The interface includes sales analysis, uploads, API intake, security analysis, evidence summaries, and reporting reminders.
+ForeSight now has one working React dashboard and one FastAPI application integrating the finance, login-anomaly, and phishing service code. The interface includes sales analysis, uploads, API intake, security analysis, evidence summaries, and reporting reminders.
 
 The implementation was developed in `/private/tmp/decisioniq-integration`. The original local checkout was left untouched. The integration commit preserves the three contributor branch histories. No changes were pushed to GitHub or published as a hosted application.
 

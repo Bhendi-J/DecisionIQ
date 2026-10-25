@@ -1,4 +1,4 @@
-# DecisionIQ
+# ForeSight
 
 A local, company-focused business intelligence dashboard for a college demonstration. React presents sales outlooks, product performance, independent security signals, data ingestion, and reporting reminders. FastAPI integrates the team's finance, login anomaly, and phishing services.
 
@@ -25,7 +25,7 @@ uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8082
 
 For frontend development, keep FastAPI on port 8082 and run `npm --prefix frontend run dev` in a second terminal. Vite serves port 5173 and proxies API requests. Rebuild the frontend to update the version served directly by FastAPI.
 
-Optional environment overrides are documented in `.env.example`. To load a copied `.env`, add `--env-file .env` to the uvicorn command. Runtime data defaults to the ignored `data/dashboard.sqlite3` file.
+Internal Python module names and existing `DECISIONIQ_*` environment variables are retained for compatibility. Optional environment overrides are documented in `.env.example`. To load a copied `.env`, add `--env-file .env` to the uvicorn command. Runtime data defaults to the ignored `data/dashboard.sqlite3` file.
 
 ## Workspace experience
 
@@ -60,7 +60,7 @@ Both paths use the same company-scoped normalization, stable-ID checks, and proc
 
 ```bash
 curl http://127.0.0.1:8082/api/intake/sales \
-  -H "X-API-Key: $DECISIONIQ_API_KEY" \
+  -H "X-API-Key: $FORESIGHT_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"currency":"GBP","records":[{"record_id":"order-001","date":"2026-10-01","product_id":"SKU-1","product":"Notebook","units":3,"sales":150}]}'
 ```
@@ -71,7 +71,7 @@ Login-time integration:
 
 ```bash
 curl http://127.0.0.1:8082/api/intake/logins \
-  -H "X-API-Key: $DECISIONIQ_API_KEY" \
+  -H "X-API-Key: $FORESIGHT_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"event_id":"login-001","occurred_at":"2026-10-25T10:30:00Z","login_hour":16,"failed_attempts":0,"new_device":0,"login_frequency":5,"location_difference":0}'
 ```
@@ -126,8 +126,8 @@ Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Te
 ## Docker
 
 ```bash
-docker build -t decisioniq .
-docker run --rm -p 8000:8000 -v decisioniq-data:/app/data decisioniq
+docker build -t foresight .
+docker run --rm -p 8000:8000 -v foresight-data:/app/data foresight
 ```
 
 The multistage build compiles the React frontend and serves it from FastAPI. Include phishing dependencies with `--build-arg INSTALL_PHISHING=true` and mount the trained model read-only, setting `PHISHING_MODEL_PATH`. `/health` reports process/model health; `/ready` returns 503 until all three trained models are available.

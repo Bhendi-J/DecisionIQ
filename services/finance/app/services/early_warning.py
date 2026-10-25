@@ -1,5 +1,5 @@
 """
-Financial Early Warning Layer for DecisionIQ.
+Financial Early Warning Layer for ForeSight.
 
 This is a RULE-BASED decision-support layer on top of ML model outputs.
 It is NOT a new ML model. It aggregates signals from:

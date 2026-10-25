@@ -1,5 +1,5 @@
 [project]
-name = "decisioniq"
+name = "foresight"
 version = "1.0.0"
 description = "Integrated finance, login anomaly, and email phishing intelligence API"
 requires-python = ">=3.11,<3.13"
