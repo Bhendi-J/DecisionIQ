@@ -1,172 +1,149 @@
 # DecisionIQ
 
-One FastAPI application integrating the team's finance, login anomaly, and email phishing services. The original service branch histories are preserved in the integration merge.
+A local, company-focused business intelligence dashboard for a college demonstration. React presents sales outlooks, product performance, independent security signals, data ingestion, and reporting reminders. FastAPI integrates the team's finance, login anomaly, and phishing services.
 
-## Run locally
+The interface uses graphite surfaces, warm ivory and brass accents, locally bundled **Manrope** and **Geist Mono** variable fonts, interactive SVG charts, and responsive layouts. There are no external font, analytics, or LLM requests.
 
-Requires Python 3.11 or 3.12 and [uv](https://docs.astral.sh/uv/).
+## Run the dashboard
+
+Requires Python 3.11 or 3.12, Node.js 22+, and [uv](https://docs.astral.sh/uv/).
+
+```bash
+./scripts/run_local.sh
+```
+
+Open **http://127.0.0.1:8082**. The script installs locked dependencies, builds the dashboard, and runs the local backend. For a different port, use `DECISIONIQ_PORT=8084 ./scripts/run_local.sh`.
+
+Or run the steps separately:
 
 ```bash
 uv sync --locked
-cp .env.example .env
-uv run uvicorn decisioniq.main:app --env-file .env --reload --port 8000
+npm --prefix frontend ci
+npm --prefix frontend run build
+uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8082
 ```
 
-Open **http://localhost:8000/docs** for the interactive API. Finance and anomaly models are included. Phishing requires the separate trained artifact described below; its absence does not prevent the other services from starting.
+For frontend development, keep FastAPI on port 8082 and run `npm --prefix frontend run dev` in a second terminal. Vite serves port 5173 and proxies API requests. Rebuild the frontend to update the version served directly by FastAPI.
 
-## API
+Optional environment overrides are documented in `.env.example`. To load a copied `.env`, add `--env-file .env` to the uvicorn command. Runtime data defaults to the ignored `data/dashboard.sqlite3` file.
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/health` | Process health and readiness of every model; may report `degraded` |
-| GET | `/ready` | Returns 200 only when all three models load; otherwise 503 |
-| POST | `/assess` | Supplied company financials plus optional login/email analysis and combined risk |
-| POST | `/finance/predict` | Cash-flow stress probability and exact TreeSHAP contributors |
-| GET / POST | `/finance/summary` | Forecast, finance risk, SHAP, and optional security score |
-| GET | `/finance/forecast?horizon_days=90` | Historical revenue plus 7–180 future days |
-| GET / POST | `/finance/unified` | Finance summary with rule-based early warnings |
-| POST | `/finance/simulate` | Recompute a supplied baseline under what-if changes |
-| POST | `/anomaly/score` | Score a login with the original Isolation Forest model |
-| POST | `/phishing/predict` | Classify email text with the supplied DistilBERT model |
-| GET | `/finance/health`, `/anomaly/health`, `/phishing/health` | Service-specific model readiness; 503 when unavailable |
+## Workspace experience
 
-GET finance summaries use the original default SME profile. POST variants score the supplied financial profile. **The revenue forecast always uses the bundled demonstration retail history**, not the submitted company's monthly financials. Its forecast starts after December 9, 2011, the final observation in that dataset.
+- **Overview:** recorded sales, an evaluated outlook, units where known, product contribution, and independent operational signals.
+- **Data Hub:** CSV/XLSX uploads, field mapping, date and number conventions, validation, processing history, API credential rotation, and intake controls.
+- **Sales Outlook:** actual and forecast observations, indicative ranges, held-out error, stronger/weaker weeks only when supported, product analysis, and explicit volume/price scenarios.
+- **Security:** real Isolation Forest inference, company API login events, clearly labeled synthetic samples, and phishing readiness.
+- **Insights:** downloadable, deterministic evidence summaries. External GenAI is not configured or represented as active.
+- **Activity:** reporting schedules, persisted notifications, snooze, and processing/configuration history.
+- **Model Lab:** the original prototype cash-stress classifier and native TreeSHAP, separated from company-facing sales conclusions.
 
-### Combined assessment
+The sidebar switcher is labeled **Demo / admin**. Aster Trading, Maison Supply, and Nordhaus are fictional sample workspaces representing different customer-country segments of a single public UCI retailer. They are not independent observed businesses. Create an upload workspace to analyze a different source; public samples are read-only.
+
+## Financial meaning and provenance
+
+The dashboard's compact public dataset contains twelve selected merchandise SKUs per country segment. It retains signed quantities, including cancellations/returns, and excludes postage/manual adjustment codes. Its target is **net recorded sales value**, not received cash, profit, or complete retailer revenue. Amounts remain in **GBP**, and forecasts start after the actual historical cutoff in 2011. See [dataset provenance](services/finance/data/PROVENANCE.md) for the source, CC BY 4.0 attribution, transformations, and reproduction command.
+
+Forecasting needs at least 84 calendar days under this demonstration's eligibility policy. Missing calendar days are treated as unknown unless the upload explicitly declares them to mean zero sales. The last 28 days are withheld; Prophet provides the outlook only when its MAE beats a weekly seasonal baseline. The selected method is shown. Longer outlooks extrapolate beyond the evaluation window; ranges are indicative rather than performance guarantees. If complete forecast weeks have essentially the same expected total, the interface does not invent a strongest/quietest week.
+
+Product ranking uses a fixed subset selected from the complete public history; the backtest evaluates the resulting series, not the product-selection process. Source periods, currencies, and sample labels remain visible. Units stay unavailable when source quantities are incomplete. No missing uploaded financial fields are replaced with the legacy model's default SME values.
+
+The legacy `/finance/*` endpoints retain the separate original positive-sales aggregate and synthetic/prototype XGBoost experiment. They are available for compatibility and Model Lab exploration, not a validated probability of financial trouble for an uploaded company.
+
+## Upload and API ingestion
+
+Both paths use the same company-scoped normalization, stable-ID checks, and processing pipeline. Batches are limited to 5 MB / 25,000 rows; uploads accept CSV/XLSX. Invalid rows block processing with location-specific explanations. Choose date order and decimal convention explicitly. There is no automatic foreign-exchange conversion.
+
+1. Create an upload workspace and select its native currency.
+2. Upload a file, review the suggested mappings, validate, and process.
+3. For integration, activate API intake in the Data Hub and generate a credential.
+4. Copy the key once; only its hash is stored. Rotation revokes the prior key.
 
 ```bash
-curl http://localhost:8000/assess \
+curl http://127.0.0.1:8082/api/intake/sales \
+  -H "X-API-Key: $DECISIONIQ_API_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{
-    "finance": {
-      "sector": "Retail",
-      "employees": 12,
-      "revenue_usd": 50000,
-      "opex_usd": 42000,
-      "accounts_receivable_days": 45,
-      "inventory_days": 30,
-      "loan_balance_usd": 20000,
-      "owner_injections_usd": 2000
-    },
-    "login": {
-      "login_hour": 3,
-      "failed_attempts": 8,
-      "new_device": 1,
-      "login_frequency": 1,
-      "location_difference": 1
-    },
-    "email": {"text": "Please review the attached invoice"}
-  }'
+  -d '{"currency":"GBP","records":[{"record_id":"order-001","date":"2026-10-01","product_id":"SKU-1","product":"Notebook","units":3,"sales":150}]}'
 ```
 
-Each security signal reports `available`, `unavailable`, or `not_requested`. `security_coverage` is `complete` when all requested security checks succeeded, `partial` when only some succeeded, or `none` when no security score is available. A partial result is provisional and must be displayed with its coverage.
+The accepted response includes `batch_id`. Follow it with the authenticated dashboard's processing history or `GET /api/batches/{batch_id}` using its signed demo session. Exact replayed records are skipped; an existing stable ID with different values is rejected. API records require IDs. Uploads without IDs explain that exact normalized rows are deduplicated; map IDs when identical purchases can occur.
 
-All combined scores use **0–1, higher means greater risk**:
-
-```text
-security_score = max(available anomaly_score, available phishing_probability)
-composite_score = 0.7 * finance_probability + 0.3 * security_score
-```
-
-This is an explicit aggregation policy, not a calibrated probability of overall business failure. It retains finance's original 70/30 weighting. The anomaly score is the original sigmoid transform of Isolation Forest's decision function. Security endpoints also retain their original integer `risk_score` on 0–100 for display. Phishing `confidence` measures confidence in the selected class; aggregation uses `phishing_probability` instead.
-
-When no security score is available, `security_score` is `null` and the composite equals the finance score. No mock security baseline is inserted. Direct finance summary/simulation calls may accept an already computed `?security_score=0.6`; values outside 0–1 are rejected.
-
-### What-if
+Login-time integration:
 
 ```bash
-curl http://localhost:8000/finance/simulate \
+curl http://127.0.0.1:8082/api/intake/logins \
+  -H "X-API-Key: $DECISIONIQ_API_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"base_input":{"revenue_usd":50000,"opex_usd":35000},"expenses_change_pct":15,"revenue_change_pct":-10}'
+  -d '{"event_id":"login-001","occurred_at":"2026-10-25T10:30:00Z","login_hour":16,"failed_attempts":0,"new_device":0,"login_frequency":5,"location_difference":0}'
 ```
 
-The simulation recomputes both baseline and scenario from the supplied financial profile without changing saved data or rerunning security models.
+API credentials determine the workspace; request fields cannot select another company. Paused or upload-only intake returns `409 intake_paused`; manual uploads remain available. Frontend sessions, batches, events, exports, and stored observations remain company-scoped. Demo workspace switching is deliberately open for review and **is not production authentication**. `DECISIONIQ_DEMO_MODE=0` disables demo session creation; a real identity provider is outside this college demo.
 
-## Phishing model setup
+## Reporting reminders
 
-The `email_phishing_detection` branch excludes `model/` in its gitignore and supplies no trained weights or tokenizer. Obtain Jiya's **complete saved model directory**, including the configuration, model weights, and tokenizer files, and place it at:
+A server worker checks persisted schedules every 30 seconds while the backend runs, including when no browser is open. Cadence defaults to 24 hours and can be changed with the due date and required reporting-period coverage in Activity.
 
-```text
-services/phishing/models/phishing_distilbert/
-```
+- Paused API + overdue missing data: upload or resume intake.
+- Upload-only + overdue missing data: upload the required reporting period.
+- Data received but unprocessed: review/process that batch instead of uploading duplicates.
+- Active API: no paused-intake upload reminder. Data periods and connection state remain visible.
+- Current coverage resolves a reminder. Snooze postpones repeated notifications.
 
-Alternatively set `PHISHING_MODEL_PATH` to a local model directory. Install the extra and restart:
+Reminders are in-app only. There is no real email/SMS delivery. Upload time is separate from observed data coverage, so re-uploading an old file does not make an overdue period current.
+
+## Phishing model
+
+The source branch does not contain trained DistilBERT weights/tokenizer. Until the contributor's complete saved directory is supplied, the UI shows setup required and the direct prediction endpoint returns 503. Other services remain usable.
+
+Place the complete artifact under `services/phishing/models/phishing_distilbert/` or set `PHISHING_MODEL_PATH`. Expected labels: 0=legitimate, 1=phishing.
 
 ```bash
 uv sync --locked --extra phishing
-uv run --extra phishing uvicorn decisioniq.main:app --env-file .env --port 8000
+uv run --extra phishing uvicorn decisioniq.main:app --host 127.0.0.1 --port 8082
 ```
 
-Inference loads local files only and never downloads a substitute model. The expected labels are **0=legitimate, 1=phishing**. The original 256-token limit is retained; responses report `truncated: true` for longer inputs. Until a trained artifact is supplied, `/phishing/predict` returns 503 and `/assess` explicitly marks that signal unavailable.
-
-To train using the original cleaned CEAS08 CSV (obtain it from the source branch or your dataset storage):
-
-```bash
-uv sync --locked --extra phishing --extra training
-uv run --extra phishing --extra training python -m services.phishing.train \
-  --data data/CEAS08_DecisionIQ_clean.csv --sample-size 10000 --epochs 1
-```
-
-Remove `--sample-size` to use the full dataset. Training requires downloading the base DistilBERT checkpoint; API startup and inference do not. Model directories remain ignored by Git so large trained weights can be distributed separately.
-
-## Layout and cleanup
-
-```text
-decisioniq/                 Shared FastAPI app, configuration, assessment orchestration
-services/finance/           Forecasting, cash-flow risk, SHAP, early warnings, what-if
-services/anomaly/           Login model, API, inference, training entrypoint
-services/phishing/          Email API, inference, training entrypoint
-tests/                     API contracts, real finance/anomaly inference, failure handling
-pyproject.toml + uv.lock    Shared dependencies, optional ML extras, reproducible versions
-```
-
-Excluded from the integrated tree: raw training/benchmark datasets, bytecode and caches, editor settings, duplicate model copies, generated charts/results, ad hoc investigation scripts, standalone demo dashboards, and unused bankruptcy benchmark models. All inference code, active supplied model artifacts, and reproducible training entrypoints are retained. The ~7 KB daily revenue CSV replaces the ~24 MB runtime workbook and is derived using finance's original cleaning and aggregation rules. Cleanup changes the current tree; it does not rewrite Git history or delete contributor branches.
-
-Finance artifacts were converted from pickle to Prophet/XGBoost JSON, with matching predictions checked before and after conversion. The anomaly artifact retains its original joblib format and matching scikit-learn version.
-
-Source branches and integration inputs:
-
-| Service | Branch | Source commit |
-| --- | --- | --- |
-| Finance | `Finance-model-branch` | `a64ec1b23dc3211ee4029a7f02fd00db508da61c` |
-| Login anomaly | `security-anomaly` | `367efb8fefd16b76cf47787a322e0d1cd3c53bbc` |
-| Email phishing | `email_phishing_detection` | `e8f8acd131b7b4454cf0b78b9972146758517d89` |
-
-## Retrain finance or anomaly models
-
-Run from the repository root and restart the API after changing model artifacts:
-
-```bash
-uv run python -m services.finance.scripts.train_prophet
-uv run python -m services.finance.scripts.train_xgboost --data data/small_business_cashflow.csv
-uv run python -m services.anomaly.train_model --data data/login_data.csv
-```
-
-For a raw Online Retail workbook, add `--data data/OnlineRetail.xlsx` to the Prophet command and enable `--extra training`. Keep raw datasets under the ignored root `data/` directory. Finance's classification data and anomaly's original login data are prototypes/synthetic datasets; integration tests verify software behavior, not model suitability for production decisions.
+Or use `INSTALL_PHISHING=1 ./scripts/run_local.sh`. Inference loads local files only, retains the original 256-token limit, reports truncation, and bounds native CPU threads via `PHISHING_TORCH_THREADS` (default 1). Successful manual email analysis stores the result and text length, not raw email text.
 
 ## Verify
 
 ```bash
-uv run pytest -q
+uv run --extra phishing pytest -q
 uv run ruff check .
 uv run ruff format --check .
+npm --prefix frontend run build
 ```
 
-To include the real local Transformers adapter test, run `uv run --extra phishing pytest -q`. It creates a tiny untrained model in a temporary directory to test loading, probabilities, and truncation; this fixture is never shipped as the phishing model.
+The optional phishing adapter test creates a tiny untrained temporary fixture to verify actual Transformers loading/inference; that fixture is never deployed as the phishing model. Core tests also run without the optional extra, with that adapter test skipped.
+
+For browser verification, run a second backend with a separate database:
+
+```bash
+DECISIONIQ_DB_PATH=/tmp/decisioniq-browser-qa.sqlite uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8083
+npm --prefix frontend run test:browser
+```
+
+Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, and mobile layout. Test runtime data and screenshots are ignored.
 
 ## Docker
 
 ```bash
 docker build -t decisioniq .
-docker run --rm -p 8000:8000 decisioniq
+docker run --rm -p 8000:8000 -v decisioniq-data:/app/data decisioniq
 ```
 
-Include phishing dependencies with `--build-arg INSTALL_PHISHING=true`, then mount your trained artifact:
+The multistage build compiles the React frontend and serves it from FastAPI. Include phishing dependencies with `--build-arg INSTALL_PHISHING=true` and mount the trained model read-only, setting `PHISHING_MODEL_PATH`. `/health` reports process/model health; `/ready` returns 503 until all three trained models are available.
 
-```bash
-docker run --rm -p 8000:8000 \
-  -v /absolute/path/phishing_distilbert:/models/phishing:ro \
-  -e PHISHING_MODEL_PATH=/models/phishing decisioniq
+## Repository and original services
+
+```text
+frontend/                   React/TypeScript dashboard and bundled font dependencies
+decisioniq/                Shared API, assessment orchestration
+decisioniq/dashboard/      Local store, sessions, intake, sales analysis, reminders
+services/                   Original finance, anomaly, and phishing models/adapters
+scripts/                    Local launcher and reproducible public-data preparation
+tests/                      API/model checks
+frontend/tests/             Real-browser and accessibility workflows
 ```
 
-The container health check measures process liveness. Use `/ready` when your deployment requires every model, including phishing, to be available. Browser origins can be configured with `CORS_ORIGINS` as a comma-separated list.
+Raw training datasets, bytecode/caches, duplicate models, generated charts, editor settings, and unused standalone demos are excluded. Active supplied models, training entrypoints, compact attributed samples, and original branch ancestry are retained. Finance artifacts use portable JSON, with original-versus-converted predictions checked. The anomaly artifact retains the matching scikit-learn version.
+
+Integration inputs: finance `a64ec1b`, anomaly `367efb8`, phishing `e8f8acd`. The implementation lives on `integration/unified-services` in the separate checkout; no GitHub publication has been authorized.

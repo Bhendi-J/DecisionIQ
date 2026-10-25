@@ -1,10 +1,14 @@
 import logging
 import os
+import asyncio
+from contextlib import suppress
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from decisioniq.assessment import router as assessment_router
 from decisioniq.errors import ModelUnavailable
@@ -13,6 +17,11 @@ from services.anomaly.predict import _load_model
 from services.finance.app.api.routes import get_finance_service, router as finance_router
 from services.phishing.api import router as phishing_router
 from services.phishing.predict import _load_bundle
+from decisioniq.config import ROOT
+from decisioniq.dashboard.api import router as dashboard_router
+from decisioniq.dashboard import store as dashboard_store
+from decisioniq.dashboard.analytics import get_forecast, refresh_forecast
+from decisioniq.dashboard.reminders import run_scheduler, evaluate_reminders
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +45,18 @@ def model_status():
 async def lifespan(app: FastAPI):
     # Load once per worker; each optional service can be unavailable independently.
     model_status()
-    yield
+    await asyncio.to_thread(dashboard_store.initialize)
+    for row in dashboard_store.rows("SELECT id FROM companies"):
+        if get_forecast(row["id"])["status"] == "pending":
+            await asyncio.to_thread(refresh_forecast, row["id"])
+    await asyncio.to_thread(evaluate_reminders)
+    scheduler = asyncio.create_task(run_scheduler())
+    try:
+        yield
+    finally:
+        scheduler.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler
 
 
 app = FastAPI(
@@ -80,3 +100,27 @@ app.include_router(finance_router)
 app.include_router(anomaly_router)
 app.include_router(phishing_router)
 app.include_router(assessment_router)
+app.include_router(dashboard_router)
+
+frontend = ROOT / "frontend/dist"
+if (frontend / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=frontend / "assets"), name="dashboard-assets")
+
+
+@app.get("/", include_in_schema=False)
+def dashboard_index():
+    if (frontend / "index.html").is_file():
+        return FileResponse(frontend / "index.html")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Build the dashboard with: cd frontend && npm ci && npm run build"},
+    )
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon():
+    built = frontend / "favicon.svg"
+    return FileResponse(
+        built if built.is_file() else ROOT / "frontend/public/favicon.svg",
+        media_type="image/svg+xml",
+    )

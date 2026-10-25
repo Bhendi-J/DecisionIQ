@@ -18,3 +18,8 @@ services/phishing/models/
 *.egg-info/
 dist/
 build/
+node_modules/
+.sites-runtime/
+*.tsbuildinfo
+test-results/
+playwright-report/

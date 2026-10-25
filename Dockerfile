@@ -1,3 +1,10 @@
+FROM node:22-slim AS dashboard-build
+WORKDIR /ui
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -18,6 +25,7 @@ RUN if [ "$INSTALL_PHISHING" = "true" ]; then \
 
 COPY decisioniq ./decisioniq
 COPY services ./services
+COPY --from=dashboard-build /ui/dist ./frontend/dist
 RUN useradd --create-home appuser && chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8000
