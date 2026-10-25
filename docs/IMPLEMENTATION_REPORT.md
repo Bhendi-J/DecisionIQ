@@ -2,7 +2,7 @@
 
 **Prepared:** 25 October 2026
 **Purpose:** Explain what was built, why it was built this way, how it works, and its current limits.
-**Implementation reviewed:** `f28b37c`, following service integration commit `0e157a1`.
+**Implementation reviewed:** account access upgrade `f3e4cab`; original dashboard `f28b37c` and service integration `0e157a1`.
 **Delivery:** Local college demonstration on `integration/unified-services`.
 **Product name:** ForeSight; renamed from DecisionIQ after the implementation review.
 
