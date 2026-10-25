@@ -4,7 +4,7 @@ import asyncio
 from contextlib import suppress
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +19,7 @@ from services.phishing.api import router as phishing_router
 from services.phishing.predict import _load_bundle
 from decisioniq.config import ROOT
 from decisioniq.dashboard.api import router as dashboard_router
+from decisioniq.dashboard.auth import router as accounts_router, require_admin
 from decisioniq.dashboard import store as dashboard_store
 from decisioniq.dashboard.analytics import get_forecast, refresh_forecast
 from decisioniq.dashboard.reminders import run_scheduler, evaluate_reminders
@@ -75,6 +76,16 @@ if origins:
     )
 
 
+@app.middleware("http")
+async def private_responses(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(("/api/", "/finance/", "/anomaly/", "/phishing/", "/assess")):
+        response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
 @app.exception_handler(ModelUnavailable)
 async def unavailable_handler(request: Request, exc: ModelUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(exc), "code": "model_unavailable"})
@@ -96,11 +107,12 @@ def ready():
     return JSONResponse(status_code=200 if available else 503, content={"models": models})
 
 
-app.include_router(finance_router)
-app.include_router(anomaly_router)
-app.include_router(phishing_router)
-app.include_router(assessment_router)
+app.include_router(finance_router, dependencies=[Depends(require_admin)])
+app.include_router(anomaly_router, dependencies=[Depends(require_admin)])
+app.include_router(phishing_router, dependencies=[Depends(require_admin)])
+app.include_router(assessment_router, dependencies=[Depends(require_admin)])
 app.include_router(dashboard_router)
+app.include_router(accounts_router)
 
 frontend = ROOT / "frontend/dist"
 if (frontend / "assets").is_dir():

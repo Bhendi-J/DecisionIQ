@@ -1,5 +1,6 @@
 export type Page = 'overview' | 'data' | 'sales' | 'security' | 'insights' | 'activity' | 'lab';
 export interface Company {
+  role: 'owner' | 'member' | 'admin';
   id: string;
   name: string;
   initials: string;
@@ -17,6 +18,12 @@ export interface Company {
   expected_period_end: string;
   reminder_hours: number;
   snoozed_until: string | null;
+}
+export interface AccountSession {
+  user: { id: string; name: string; email: string; is_admin: boolean };
+  companies: Company[];
+  company_id: string | null;
+  csrf_token: string;
 }
 export interface Point {
   date: string;

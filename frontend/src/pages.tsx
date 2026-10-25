@@ -28,7 +28,7 @@ import {
   SlidersHorizontal,
   Upload,
 } from 'lucide-react';
-import { api, download, money, number, shortDate, time } from './api';
+import { api, csrfHeaders, download, money, number, shortDate, time } from './api';
 import Chart from './Chart';
 import {
   Badge,
@@ -640,7 +640,8 @@ export function DataHub(props: Props) {
             </button>
             <button
               className="button ghost"
-              disabled={busy}
+              disabled={busy || d.company.role === 'member'}
+              title={d.company.role === 'member' ? 'Company owners manage API intake' : undefined}
               onClick={() => changeState(d.company.api_state === 'active' ? 'paused' : 'active')}
             >
               {d.company.api_state === 'active' ? <Pause size={14} /> : <Play size={14} />}
@@ -660,7 +661,11 @@ export function DataHub(props: Props) {
                   : 'Create a credential to send events into this workspace.'}{' '}
                 Rotating revokes the previous key.
               </p>
-              <button className="button secondary" disabled={busy} onClick={rotate}>
+              <button
+                className="button secondary"
+                disabled={busy || d.company.role === 'member'}
+                onClick={rotate}
+              >
                 {busy ? (
                   <Spinner />
                 ) : (
@@ -1242,6 +1247,7 @@ export function ActivityPage({ data: d, refresh, toast }: Props) {
             <button
               className="icon-button"
               aria-label="Edit reporting schedule"
+              disabled={d.company.role === 'member'}
               onClick={() => setSettings(true)}
             >
               <Settings2 size={17} />
@@ -1422,7 +1428,7 @@ export function ModelLab({ data: d }: Props) {
     try {
       const response = await fetch('/finance/predict', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
         body: JSON.stringify({ revenue_usd: revenue, opex_usd: opex }),
       });
       const value = await response.json();

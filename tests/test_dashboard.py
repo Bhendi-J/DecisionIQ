@@ -5,6 +5,7 @@ import io
 from datetime import timedelta
 
 import pytest
+from conftest import authenticate
 from fastapi.testclient import TestClient
 
 from decisioniq.dashboard import store
@@ -19,7 +20,8 @@ def dashboard_client(tmp_path_factory):
     old = os.environ.get("DECISIONIQ_DB_PATH")
     os.environ["DECISIONIQ_DB_PATH"] = str(tmp_path_factory.mktemp("dashboard") / "store.sqlite3")
     with TestClient(app) as client:
-        assert client.post("/api/demo/session", json={"company_id": "aster"}).status_code == 200
+        authenticate(client)
+        assert client.post("/api/auth/workspace", json={"company_id": "aster"}).status_code == 200
         yield client
     if old is None:
         os.environ.pop("DECISIONIQ_DB_PATH", None)
@@ -45,7 +47,7 @@ def test_public_sources_are_distinct_and_do_not_claim_cash_flow(dashboard_client
     client = dashboard_client
     totals = []
     for company_id in ["aster", "maison", "nordhaus"]:
-        client.post("/api/demo/session", json={"company_id": company_id})
+        client.post("/api/auth/workspace", json={"company_id": company_id})
         data = client.get("/api/dashboard").json()
         assert data["company"]["currency"] == "GBP"
         assert data["company"]["sales_basis"] == "net_recorded_sales"
@@ -68,13 +70,13 @@ def test_public_sources_are_distinct_and_do_not_claim_cash_flow(dashboard_client
 
 def test_sessions_cannot_be_forged(dashboard_client):
     client = dashboard_client
-    original = client.cookies.get("decisioniq_session")
+    original = client.cookies.get("foresight_session")
     client.cookies.clear()
     assert client.get("/api/dashboard").status_code == 401
-    client.cookies.set("decisioniq_session", "forged.signature")
+    client.cookies.set("foresight_session", "forged.signature")
     assert client.get("/api/dashboard").status_code == 401
     client.cookies.clear()
-    client.cookies.set("decisioniq_session", original)
+    client.cookies.set("foresight_session", original)
 
 
 def test_upload_mapping_processing_and_cross_company_isolation(dashboard_client):
@@ -159,7 +161,7 @@ def test_api_key_scope_pause_and_retry_deduplication(dashboard_client):
         == 202
     )
     assert client.get("/api/dashboard").json()["historical"] == []
-    client.post("/api/demo/session", json={"company_id": company["id"]})
+    client.post("/api/auth/workspace", json={"company_id": company["id"]})
     assert sum(row["sales"] for row in client.get("/api/dashboard").json()["historical"]) == 600
     client.patch("/api/settings", json={"api_state": "paused"})
     assert (

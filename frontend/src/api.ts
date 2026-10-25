@@ -1,13 +1,22 @@
+let csrfToken = '';
+export function setCsrfToken(value: string) {
+  csrfToken = value;
+}
+export function csrfHeaders(): Record<string, string> {
+  return csrfToken ? { 'X-CSRF-Token': csrfToken } : {};
+}
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch('/api' + path, {
     ...options,
     credentials: 'same-origin',
     headers: {
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...csrfHeaders(),
       ...options.headers,
     },
   });
   if (!response.ok) {
+    if (response.status === 401) window.dispatchEvent(new Event('foresight:unauthorized'));
     const error = await response
       .json()
       .catch(() => ({ detail: 'The server could not complete this request.' }));

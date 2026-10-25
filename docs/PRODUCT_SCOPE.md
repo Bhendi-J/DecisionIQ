@@ -13,6 +13,10 @@ This records the agreed requirements and implementation boundaries as of October
 - External LLM processing is undecided. Do not send company uploads to an external LLM while that decision remains open.
 - Continue using the separate integration checkout. Publishing has not been authorized; the earlier GitHub push was rejected by automatic approval review.
 
+## Implemented account boundary
+
+Registration creates a private company and owner membership. Owners manage team access and credentials; members can upload and analyze data. Administrators are provisioned by a trusted local CLI and can access public sample companies and Model Lab. Sessions are revocable server-side, cookie writes use CSRF protection, and the anonymous demo-session bypass is removed. Existing uploaded company records are preserved; only an administrator can explicitly assign ownership of an older unowned workspace. Legacy prototype endpoints require an admin session.
+
 ## Data intake
 
 Upload and API ingestion must converge on the same company-scoped validation and processing pipeline:
@@ -101,7 +105,7 @@ Use in-app notifications first. Cadence defaults to 24 hours and is configurable
 - Companies configure their reporting due dates, coverage, and reminder cadence in Activity. There is no inferred reporting schedule from public sales records.
 - Select the LLM privacy boundary and provider before enabling external processing. Current schema suggestions use aliases plus manual confirmation; narratives use deterministic templates.
 - Obtain the trained phishing artifact to enable email predictions.
-- Add real organization identity/access controls before moving beyond the deliberately open local demo switcher.
+- Account authentication and company membership now exist. Email verification, password recovery, MFA, organization verification, and production operations remain future work.
 
 ## Sources
 

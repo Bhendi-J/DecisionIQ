@@ -16,6 +16,8 @@ import {
   LayoutDashboard,
   Lightbulb,
   Menu,
+  LogOut,
+  Users,
   Plus,
   RefreshCw,
   Search,
@@ -27,7 +29,8 @@ import { api, shortDate } from './api';
 import { Badge, Dialog, Empty, ErrorBox, Spinner } from './components';
 import { ActivityPage, DataHub, Insights, ModelLab, Overview, Sales, Security } from './pages';
 import UploadWizard from './UploadWizard';
-import type { Batch, Company, Dashboard, Page } from './types';
+import Team from './Team';
+import type { AccountSession, Batch, Company, Dashboard, Page } from './types';
 
 const navigation: { id: Page; label: string; icon: LucideIcon; sub: string }[] = [
   {
@@ -77,7 +80,22 @@ function initialPage(): Page {
   return navigation.find((item) => item.id === location.hash.slice(1))?.id || 'overview';
 }
 
-export default function App() {
+export default function App({
+  session,
+  onSession,
+  onLogout,
+}: {
+  session: AccountSession;
+  onSession: (value: AccountSession) => void;
+  onLogout: () => Promise<void>;
+}) {
+  const [team, setTeam] = useState(false);
+  const initials = session.user.name
+    .split(' ')
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase();
   const [page, setPage] = useState<Page>(initialPage),
     [companies, setCompanies] = useState<Company[]>([]),
     [data, setData] = useState<Dashboard | null>(null);
@@ -111,13 +129,18 @@ export default function App() {
     setBusy(true);
     setError('');
     try {
-      if (select)
-        await api('/demo/session', { method: 'POST', body: JSON.stringify({ company_id: id }) });
+      if (select) {
+        const account = await api<AccountSession>('/auth/workspace', {
+          method: 'POST',
+          body: JSON.stringify({ company_id: id }),
+        });
+        setCompanies(account.companies);
+        onSession(account);
+      }
       const result = await api<Dashboard>(`/dashboard?horizon=${days}`);
       if (seq === sequence.current) {
         setData(result);
         activeCompany.current = id;
-        localStorage.setItem('decisioniq-workspace', id);
       }
     } catch (err) {
       if (seq === sequence.current) setError((err as Error).message);
@@ -126,19 +149,11 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
-    async function start() {
-      try {
-        const result = await api<{ companies: Company[] }>('/bootstrap');
-        setCompanies(result.companies);
-        const saved = localStorage.getItem('decisioniq-workspace');
-        const selected = result.companies.find((c) => c.id === saved) || result.companies[0];
-        await load(selected.id, 30, true);
-      } catch (err) {
-        setError((err as Error).message);
-        setBusy(false);
-      }
-    }
-    void start();
+    setCompanies(session.companies);
+    const selected =
+      session.companies.find((c) => c.id === session.company_id) || session.companies[0];
+    if (selected) void load(selected.id, 30, selected.id !== session.company_id);
+    else setBusy(false);
   }, [load]);
   useEffect(() => {
     const listener = () => setPage(initialPage());
@@ -190,8 +205,9 @@ export default function App() {
     await load(id, horizon, true);
   }
   async function newWorkspace(id: string) {
-    const result = await api<{ companies: Company[] }>('/bootstrap');
+    const result = await api<AccountSession>('/auth/me');
     setCompanies(result.companies);
+    onSession(result);
     await load(id, horizon, true);
   }
   function openUpload(value?: Batch) {
@@ -216,7 +232,8 @@ export default function App() {
       setBusy(false);
     }
   }
-  const selected = navigation.find((item) => item.id === page)!;
+  const allowedPage = page === 'lab' && !session.user.is_admin ? 'overview' : page;
+  const selected = navigation.find((item) => item.id === allowedPage)!;
   const unread = data?.reminders.filter((item) => !item.read_at).length || 0;
   const shared = data ? { data, go, upload: openUpload, refresh, toast, horizon } : null;
   const views = {
@@ -228,7 +245,7 @@ export default function App() {
     activity: ActivityPage,
     lab: ModelLab,
   };
-  const View = views[page];
+  const View = views[allowedPage];
   return (
     <div className="app-shell">
       {sidebar && (
@@ -253,20 +270,22 @@ export default function App() {
           <button
             className="workspace-button"
             aria-expanded={workspaceMenu}
-            title="Open demo workspace switcher"
+            title={session.user.is_admin ? 'Open admin company switcher' : 'Open company switcher'}
             onClick={() => setWorkspaceMenu(!workspaceMenu)}
             disabled={busy}
           >
             <span className="workspace-avatar">{data?.company.initials || 'FS'}</span>
             <span>
               <strong>{data?.company.name || 'Your workspace'}</strong>
-              <small>Demo workspace</small>
+              <small>{session.user.is_admin ? 'Administrator view' : 'Company workspace'}</small>
             </span>
             <ChevronDown size={14} />
           </button>
           {workspaceMenu && (
             <div className="workspace-menu">
-              <p className="eyebrow">DEMO / ADMIN SWITCHER</p>
+              <p className="eyebrow">
+                {session.user.is_admin ? 'ADMIN / COMPANY SWITCHER' : 'YOUR COMPANIES'}
+              </p>
               {companies.map((company) => (
                 <button key={company.id} onClick={() => switchWorkspace(company.id)}>
                   <span className="small-avatar">{company.initials}</span>
@@ -313,15 +332,17 @@ export default function App() {
         </nav>
         <div className="sidebar-secondary">
           <div className="nav-label">EXPLORE</div>
-          <a
-            href="#lab"
-            className={`nav-item ${page === 'lab' ? 'active' : ''}`}
-            onClick={() => go('lab')}
-          >
-            <FlaskConical size={18} strokeWidth={1.5} />
-            Model Lab
-            <span className="experimental-dot" />
-          </a>
+          {session.user.is_admin && (
+            <a
+              href="#lab"
+              className={`nav-item ${page === 'lab' ? 'active' : ''}`}
+              onClick={() => go('lab')}
+            >
+              <FlaskConical size={18} strokeWidth={1.5} />
+              Model Lab
+              <span className="experimental-dot" />
+            </a>
+          )}
           <button className="nav-item" onClick={() => setHelp(true)}>
             <CircleHelp size={18} strokeWidth={1.5} />
             Sources & methodology
@@ -334,10 +355,16 @@ export default function App() {
             <span className="mono">V1.0</span>
           </div>
           <div className="workspace-owner">
-            <span className="owner-avatar">DW</span>
+            <span className="owner-avatar">{initials}</span>
             <span>
-              <strong>Demo workspace</strong>
-              <small>Company view · local only</small>
+              <strong>{session.user.name}</strong>
+              <small>
+                {session.user.is_admin
+                  ? 'Administrator'
+                  : data?.company.role === 'owner'
+                    ? 'Company owner'
+                    : 'Company member'}
+              </small>
             </span>
             <button
               className="icon-button"
@@ -347,6 +374,14 @@ export default function App() {
               <CircleHelp size={16} />
             </button>
           </div>
+          {data && data.company.role !== 'member' && (
+            <div className="account-actions">
+              <button onClick={() => setTeam(true)}>
+                <Users size={14} />
+                Manage team
+              </button>
+            </div>
+          )}
         </div>
       </aside>
       <div className="main-shell">
@@ -380,7 +415,18 @@ export default function App() {
               <Bell size={18} strokeWidth={1.6} />
               {unread > 0 && <i />}
             </button>
-            <span className="top-avatar">DW</span>
+            <span className="top-avatar" title={session.user.email}>
+              {initials}
+            </span>
+            <button
+              className="icon-button"
+              aria-label="Sign out"
+              onClick={() => {
+                void onLogout().catch((err) => toast(err.message));
+              }}
+            >
+              <LogOut size={17} />
+            </button>
           </div>
         </header>
         <main id="main-content">
@@ -563,6 +609,7 @@ export default function App() {
             </div>
             <p className="eyebrow">PAGES</p>
             {navigation
+              .filter((item) => item.id !== 'lab' || session.user.is_admin)
               .filter((item) =>
                 `${item.label} ${item.sub}`.toLowerCase().includes(query.toLowerCase()),
               )
@@ -706,6 +753,13 @@ export default function App() {
           </div>
         </Dialog>
       )}
+      {team && data && (
+        <Team
+          companyName={data.company.name}
+          userId={session.user.id}
+          onClose={() => setTeam(false)}
+        />
+      )}
       {help && (
         <Dialog
           title="A clear view of the evidence"
@@ -744,10 +798,10 @@ export default function App() {
             </p>
             <h3>Your data stays here</h3>
             <p>
-              The demo uses a local SQLite store, signed demonstration sessions, and company-scoped
-              ingestion keys. Demo switching is intentionally available for review; it is not a
-              production identity system. External LLM processing is disabled. All application fonts
-              are bundled locally.
+              ForeSight uses a local SQLite store, password-protected accounts, revocable sessions,
+              and company-scoped ingestion keys. Owners manage company membership; administrators
+              alone can browse all companies and the Model Lab. External LLM processing is disabled.
+              All application fonts are bundled locally.
             </p>
             <a
               className="text-link"

@@ -27,6 +27,34 @@ For frontend development, keep FastAPI on port 8082 and run `npm --prefix fronte
 
 Internal Python module names and existing `DECISIONIQ_*` environment variables are retained for compatibility. Optional environment overrides are documented in `.env.example`. To load a copied `.env`, add `--env-file .env` to the uvicorn command. Runtime data defaults to the ignored `data/dashboard.sqlite3` file.
 
+## Accounts and company access
+
+The first screen is sign-in. Choose **Create an account** to register with your name, email, a 12–128 character password, company name, and reporting currency. Registration creates a private company and makes you its owner. Existing public sample companies are visible only to administrators.
+
+- **Owners** can upload/analyze data, manage reporting policy and API credentials, and grant/remove company access through **Manage team**.
+- **Members** can view company data, upload/process sales, analyze security events, and use reminders. They cannot manage team access, reporting settings, or API credentials.
+- **Administrators** can select all companies and use Model Lab/legacy prototype endpoints. Public signup cannot grant this role.
+
+To add a teammate, have them register an account first, then add their email and role in Manage team. No invitation emails are sent. At least one owner must remain. Membership is checked on each request, so removing access also blocks an existing session from reading that company. Ordinary company switching lists only memberships.
+
+Administrators are provisioned through trusted local access:
+
+```bash
+uv run python -m scripts.create_admin --email admin@example.com
+# Or promote an existing registered account, preserving its password:
+uv run python -m scripts.create_admin --email your-account@example.com --promote
+```
+
+New admin passwords are prompted without echo. There are no default accounts or passwords. Older uploaded workspaces remain stored, but are not automatically assigned to a newly registered user. An administrator can review them and grant an existing account an owner membership through Manage team. API keys issued through the former anonymous demo are revoked once during migration; owners/admins must rotate credentials after upgrading.
+
+Passwords use salted scrypt (N=131072, r=8, p=1). Browser sessions use random HttpOnly, SameSite=Strict cookies backed by hashed tokens in SQLite, expire after 12 hours, and are invalidated server-side on logout. Cookie-authenticated writes require the session's CSRF token in `X-CSRF-Token`; the frontend handles this automatically. Browser cross-origin auth writes are rejected. Login and registration attempts are throttled. API intake continues to use company API keys independently of browser sessions.
+
+The design uses [OWASP password-storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html) and [session-management guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) as references; this is not a security certification.
+
+Use HTTPS for deployment. Secure cookies are automatic on HTTPS; `FORESIGHT_SECURE_COOKIES=1` enforces them explicitly. Set `FORESIGHT_ORIGIN=https://your-host` behind a proxy if the externally visible origin differs. Keep the app same-origin. Account routes are `/api/auth/register`, `/login`, `/logout`, `/me`, `/workspace`, and `/members` under `/api/auth`. `/api/bootstrap` now also requires authentication; the old anonymous `/api/demo/session` endpoint has been removed. Legacy demo cookies cannot authenticate.
+
+This is working account authentication for the local demonstration. Email ownership verification, password recovery, MFA, organization verification, and full production operations are not implemented. Confirm a teammate's identity before granting access. Sales uploads remain in the local unencrypted database; define retention and backup policies before using real business data.
+
 ## Workspace experience
 
 - **Overview:** recorded sales, an evaluated outlook, units where known, product contribution, and independent operational signals.
@@ -37,7 +65,7 @@ Internal Python module names and existing `DECISIONIQ_*` environment variables a
 - **Activity:** reporting schedules, persisted notifications, snooze, and processing/configuration history.
 - **Model Lab:** the original prototype cash-stress classifier and native TreeSHAP, separated from company-facing sales conclusions.
 
-The sidebar switcher is labeled **Demo / admin**. Aster Trading, Maison Supply, and Nordhaus are fictional sample workspaces representing different customer-country segments of a single public UCI retailer. They are not independent observed businesses. Create an upload workspace to analyze a different source; public samples are read-only.
+Administrators have an explicitly labeled company switcher; ordinary accounts see only their companies. Aster Trading, Maison Supply, and Nordhaus are fictional sample workspaces representing different customer-country segments of a single public UCI retailer. They are not independent observed businesses. Create an upload workspace to analyze a different source; public samples are read-only.
 
 ## Financial meaning and provenance
 
@@ -65,7 +93,7 @@ curl http://127.0.0.1:8082/api/intake/sales \
   -d '{"currency":"GBP","records":[{"record_id":"order-001","date":"2026-10-01","product_id":"SKU-1","product":"Notebook","units":3,"sales":150}]}'
 ```
 
-The accepted response includes `batch_id`. Follow it with the authenticated dashboard's processing history or `GET /api/batches/{batch_id}` using its signed demo session. Exact replayed records are skipped; an existing stable ID with different values is rejected. API records require IDs. Uploads without IDs explain that exact normalized rows are deduplicated; map IDs when identical purchases can occur.
+The accepted response includes `batch_id`. Follow it with the authenticated dashboard's processing history or `GET /api/batches/{batch_id}` using an authorized account session. Exact replayed records are skipped; an existing stable ID with different values is rejected. API records require IDs. Uploads without IDs explain that exact normalized rows are deduplicated; map IDs when identical purchases can occur.
 
 Login-time integration:
 
@@ -76,7 +104,7 @@ curl http://127.0.0.1:8082/api/intake/logins \
   -d '{"event_id":"login-001","occurred_at":"2026-10-25T10:30:00Z","login_hour":16,"failed_attempts":0,"new_device":0,"login_frequency":5,"location_difference":0}'
 ```
 
-API credentials determine the workspace; request fields cannot select another company. Paused or upload-only intake returns `409 intake_paused`; manual uploads remain available. Frontend sessions, batches, events, exports, and stored observations remain company-scoped. Demo workspace switching is deliberately open for review and **is not production authentication**. `DECISIONIQ_DEMO_MODE=0` disables demo session creation; a real identity provider is outside this college demo.
+API credentials determine the workspace; request fields cannot select another company. Paused or upload-only intake returns `409 intake_paused`; manual uploads remain available. Frontend sessions, batches, events, exports, and stored observations remain company-scoped. Account membership and owner/admin permissions are enforced server-side. Model Lab and legacy prototype endpoints require an administrator session.
 
 ## Reporting reminders
 
@@ -117,11 +145,13 @@ The optional phishing adapter test creates a tiny untrained temporary fixture to
 For browser verification, run a second backend with a separate database:
 
 ```bash
-DECISIONIQ_DB_PATH=/tmp/decisioniq-browser-qa.sqlite uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8083
+export DECISIONIQ_DB_PATH=/tmp/foresight-browser-qa.sqlite3
+uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8083
+# In a second terminal, export the same DECISIONIQ_DB_PATH, then:
 npm --prefix frontend run test:browser
 ```
 
-Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, and mobile layout. Test runtime data and screenshots are ignored.
+Browser setup provisions a randomly credentialed test administrator in that separate database; it refuses to use the default application database. Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, mobile layout, registration/login/logout, session loss, team permissions, and membership revocation. Test runtime data and screenshots are ignored.
 
 ## Docker
 

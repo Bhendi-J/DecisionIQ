@@ -12,7 +12,7 @@ ForeSight now has one working React dashboard and one FastAPI application integr
 
 The implementation was developed in `/private/tmp/decisioniq-integration`. The original local checkout was left untouched. The integration commit preserves the three contributor branch histories. No changes were pushed to GitHub or published as a hosted application.
 
-The result is a functioning demonstration with real backend processing. External GenAI, production organization authentication, automatic model promotion, and trained phishing predictions are outside the completed functionality.
+The result is a functioning demonstration with real backend processing. Account registration, login, logout, and organization roles have now been added. External GenAI, email verification/recovery, automatic model promotion, and trained phishing predictions remain outside the completed functionality.
 
 ## 2. What changed and why
 
@@ -22,7 +22,7 @@ The result is a functioning demonstration with real backend processing. External
 | Organized contributor code under `services/` with shared application configuration | Keep model responsibilities separate while making imports, paths, dependencies, and startup predictable. |
 | Added a React/TypeScript dashboard | Provide the actual company interface requested, rather than relying on API documentation or separate prototype screens. |
 | Built a graphite dark theme with locally bundled Manrope and Geist Mono fonts | Meet the requested premium visual direction and avoid dependence on external font services. |
-| Added company-scoped storage, signed demo sessions, and scoped API keys | Keep observations, batches, exports, and event histories associated with the correct workspace. |
+| Added accounts, company memberships, revocable sessions, and scoped API keys | Restrict company records to authorized users and keep API intake tied to the correct workspace. |
 | Made sales outlooks the primary financial feature | Transaction history supports sales analysis more directly than it supports claims about cash availability or business failure. |
 | Added shared upload/API normalization and validation | Ensure different company column names converge on consistent meanings before analysis. |
 | Added persistent server-side reminders | Support overdue upload-only companies and paused API intake even when the browser is closed. |
@@ -37,7 +37,7 @@ Finance model artifacts use portable JSON formats; the XGBoost explanation path 
 The browser displays the React application. It sends requests to FastAPI, which checks workspace identity, validates input, calls the appropriate service, and reads or writes SQLite. Forecast results are cached so ordinary dashboard viewing does not train a model on every request.
 
 ```text
-Company user / demo-admin workspace switcher
+Authenticated user / membership-scoped company switcher
                     |
            React / TypeScript dashboard
                     |
@@ -164,11 +164,11 @@ Reminders are in-app only. No emails or SMS messages are sent. The scheduler was
 | Activity | Manage schedules, reminders, snooze, and processing/configuration history. |
 | Model Lab | Explore the original experimental finance model with its limitations visible. |
 
-The interface also provides search, notifications, CSV export, responsive navigation, and an explicit demo/admin workspace switcher. Public sample sales are read-only; users create separate workspaces for their own uploads. The dark visual system uses restrained brass/sage accents, custom SVG charts, and bundled fonts.
+The interface also provides search, notifications, CSV export, responsive navigation, registration, sign-in, sign-out, and owner-controlled team access. Administrators alone can use the all-company switcher and Model Lab; ordinary users can select only companies they belong to. Public sample sales are read-only; users create separate workspaces for their own uploads. The dark visual system uses restrained brass/sage accents, custom SVG charts, and bundled fonts.
 
 ## 9. Verification and delivery evidence
 
-These are the results from the implementation verification run, not a claim that tests were rerun merely to write this report.
+The first table records the original dashboard verification run. The account access upgrade was verified separately, as described below.
 
 | Verification | Recorded result |
 | --- | --- |
@@ -192,11 +192,27 @@ The clean source archive excludes virtual environments, installed JavaScript dep
 2. Obtain the contributor's complete trained phishing model/tokenizer and evaluate it on held-out examples.
 3. Decide whether LLM processing stays local or uses an external provider, what fields may leave the system, and how consent, retention, and logging will work.
 4. If adding GenAI mapping, evaluate ambiguous schemas and require confirmation before transformations affect stored observations.
-5. Before using real organizations, add real identity and organization roles, protect or restrict legacy prototype endpoints, enforce retention policies, and establish secure deployment and backups.
+5. Before using real organizations, add email ownership verification, password recovery, and optional MFA; enforce retention policies and establish secure deployment and backups. Account roles and admin restrictions on legacy endpoints are now implemented.
 6. Introduce a durable worker/job queue and restart recovery for processing. Current jobs run in the backend process and are not a production-grade unattended processing service.
 7. Evaluate forecasts over multiple time windows and relevant datasets. Introduce per-company classifiers only when there are enough meaningful labeled outcomes; add candidate registration, comparison, controlled promotion, and rollback before automatic redeployment.
 
-## 11. Running and reviewing the delivery
+## 11. Account access upgrade
+
+The former automatic demo session has been replaced by registration, login, and logout. Registration creates a private company and assigns its creator the owner role. There are no default passwords or public admin signup options. Existing public sample companies and older unowned upload workspaces remain stored and are accessible to locally provisioned administrators, who can explicitly assign company ownership.
+
+Passwords use a random salt and scrypt with N=131072, r=8, p=1. Sessions use random HttpOnly cookies and server-side hashed token records with a 12-hour expiration. Logging out deletes the server session, so copying the old cookie does not restore access. Browser writes require a CSRF token and pass an origin check; login failures and registration are rate-limited. Responses containing company data are marked no-store. No passwords or session cookies are saved in browser local storage.
+
+Owners can manage reporting settings, API credentials, and company membership. Members can view, upload, process, and analyze company data. Owners add teammates by their existing registered email, choosing an owner or member role; no invitation email is sent. The last owner cannot be removed. Authorization is checked on every request, so revoked membership cannot keep reading a company through an existing session. API intake keys remain company-scoped and independent of the browser login.
+
+Administrators are created or promoted using the local `scripts.create_admin` command. They alone can select any company and access legacy experimental finance/security endpoints and Model Lab. The anonymous `/api/demo/session` endpoint is removed, and bootstrap data requires authentication. During upgrade, keys issued through the former open switcher are revoked once; owners/admins issue replacement keys. Stored sales data is preserved.
+
+Upgrade verification passed 40 core backend/model checks on Python 3.11 and 3.12, including a targeted migration check in addition to the full-suite run. One optional phishing-adapter test was skipped on each interpreter because its extra dependencies were absent. All 12 real-browser workflows passed, including registration/login/logout, session loss, role visibility, owner-managed team access, revocation, existing ingestion flows, and desktop/mobile accessibility audits. Local administrator creation and promotion were also checked against a temporary database, preserving existing passwords.
+
+This upgrade does not verify email ownership or legal company identity and does not add password recovery or MFA. Confirm a teammate's identity before granting access. The SQLite database remains unencrypted at the application layer. HTTPS, secure configuration, data retention, backups, and operational review are still needed before deployment with real company records.
+
+Design references: [OWASP Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html) and [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html). These references do not constitute a security certification.
+
+## 12. Running and reviewing the delivery
 
 ```bash
 cd /private/tmp/decisioniq-integration
@@ -206,3 +222,9 @@ cd /private/tmp/decisioniq-integration
 After startup, open `http://127.0.0.1:8082`. The script installs locked dependencies, builds the frontend, and starts the local backend. The temporary verification servers were stopped after testing, so the launch command is required to reopen the application.
 
 For source-level details, see `README.md`, `docs/PRODUCT_SCOPE.md`, the dashboard modules, and the test suites. The report describes the implementation as reviewed; unresolved features above remain future work.
+
+To review the all-company administration view, register an account and promote it locally, then sign in again or reload:
+
+```bash
+uv run python -m scripts.create_admin --email your-account@example.com --promote
+```

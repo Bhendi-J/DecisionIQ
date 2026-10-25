@@ -11,6 +11,14 @@ async function navigate(page: import('@playwright/test').Page, label: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await page
+    .getByLabel('Email address', { exact: true })
+    .fill(process.env.FORESIGHT_TEST_ADMIN_EMAIL!);
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill(process.env.FORESIGHT_TEST_ADMIN_PASSWORD!);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Overview.', exact: true })).toBeVisible();
   await expect(page.locator('.metric').first()).toBeVisible();
 });
@@ -23,12 +31,12 @@ test('premium dashboard has local fonts, working navigation, and distinct compan
   await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(16, 17, 18)');
   expect(await page.evaluate(() => document.fonts.check('13px "Manrope Variable"'))).toBeTruthy();
   const firstSales = await page.locator('.metric strong').first().innerText();
-  await page.getByTitle('Open demo workspace switcher', { exact: true }).click();
+  await page.getByTitle('Open admin company switcher', { exact: true }).click();
   await page
     .locator('.workspace-menu')
     .getByRole('button', { name: /Maison Supply/ })
     .click();
-  await expect(page.getByTitle('Open demo workspace switcher', { exact: true })).toContainText(
+  await expect(page.getByTitle('Open admin company switcher', { exact: true })).toContainText(
     'Maison Supply',
   );
   await expect(page.locator('.metric strong').first()).not.toHaveText(firstSales);
@@ -131,7 +139,7 @@ test('mobile layout has accessible navigation and no page overflow', async ({ pa
 });
 
 test('integration controls generate a scoped key and pause real API intake', async ({ page }) => {
-  await page.getByTitle('Open demo workspace switcher', { exact: true }).click();
+  await page.getByTitle('Open admin company switcher', { exact: true }).click();
   await page.getByRole('button', { name: 'New upload workspace' }).click();
   const modal = page.getByRole('dialog');
   await modal.getByLabel('Workspace name', { exact: true }).fill('Browser API ' + Date.now());
@@ -167,7 +175,7 @@ test('integration controls generate a scoped key and pause real API intake', asy
 });
 
 test('reporting schedule and snooze are persistent interface actions', async ({ page }) => {
-  await page.getByTitle('Open demo workspace switcher', { exact: true }).click();
+  await page.getByTitle('Open admin company switcher', { exact: true }).click();
   await page.getByRole('button', { name: 'New upload workspace' }).click();
   const created = page.getByRole('dialog');
   await created

@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS reminders (
 CREATE TABLE IF NOT EXISTS api_keys (
  hash TEXT PRIMARY KEY, company_id TEXT NOT NULL REFERENCES companies(id), prefix TEXT NOT NULL,
  created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS users (
+ id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+ password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS memberships (
+ user_id TEXT NOT NULL REFERENCES users(id), company_id TEXT NOT NULL REFERENCES companies(id),
+ role TEXT NOT NULL CHECK(role IN ('owner','member')), PRIMARY KEY(user_id,company_id));
+CREATE TABLE IF NOT EXISTS sessions (
+ token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), company_id TEXT,
+ csrf_token TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS auth_limits (
+ key TEXT PRIMARY KEY, started_at TEXT NOT NULL, attempts INTEGER NOT NULL);
 """
 
 
@@ -130,6 +141,18 @@ def initialize():
     with connect() as connection:
         connection.execute("PRAGMA journal_mode=WAL")
         connection.executescript(SCHEMA)
+        if not connection.execute("SELECT 1 FROM config WHERE name='account_auth_v1'").fetchone():
+            # Keys issued through the former open demo switcher cannot establish ownership.
+            for row in connection.execute("SELECT company_id FROM api_keys").fetchall():
+                activity(
+                    row["company_id"],
+                    "access",
+                    "Legacy API credential revoked",
+                    "An owner or administrator must issue a new key after the account access upgrade.",
+                    connection,
+                )
+            connection.execute("DELETE FROM api_keys")
+            connection.execute("INSERT INTO config VALUES ('account_auth_v1','1')")
         connection.execute(
             "INSERT OR IGNORE INTO config VALUES ('session_secret',?)", (secrets.token_hex(32),)
         )
@@ -246,6 +269,35 @@ def issue_key(company_id):
         company_id, "integration", "API credential rotated", "The previous credential was revoked."
     )
     return value
+
+
+def create_workspace(name, currency, timezone, connection):
+    """Create a workspace within the caller's account/membership transaction."""
+    from zoneinfo import ZoneInfo
+
+    company_id = "workspace-" + uid()[:12]
+    config = {
+        "initials": "".join(word[0] for word in name.split()[:2]).upper(),
+        "segment": None,
+        "currency": currency,
+        "timezone": timezone,
+        "source": "Company-supplied data",
+        "source_kind": "upload",
+        "source_url": None,
+        "sales_basis": "recorded_sales",
+        "description": "Private company workspace",
+        "api_state": "upload_only",
+        "calendar_complete": False,
+        "expected_period_end": str(now().astimezone(ZoneInfo(timezone)).date()),
+        "next_due": (now() + timedelta(days=7)).isoformat(),
+        "reminder_hours": 24,
+        "snoozed_until": None,
+    }
+    connection.execute(
+        "INSERT INTO companies VALUES (?,?,?)", (company_id, name, json.dumps(config))
+    )
+    activity(company_id, "workspace", "Workspace created", "Add sales data to begin.", connection)
+    return company_id
 
 
 def migrate_public_sales(connection):

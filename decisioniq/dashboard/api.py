@@ -5,12 +5,18 @@ from datetime import date, timedelta
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 from decisioniq.dashboard import analytics, ingestion, store
-from decisioniq.dashboard.auth import current_company, demo_enabled, intake_company, token
+from decisioniq.dashboard.auth import (
+    User,
+    account_view,
+    current_company,
+    intake_company,
+    owner_company,
+)
 from decisioniq.dashboard.reminders import evaluate_reminders
 from decisioniq.errors import ModelUnavailable
 from services.anomaly.api import LoginData
@@ -20,15 +26,12 @@ from services.phishing.predict import detect_phishing
 
 router = APIRouter(prefix="/api", tags=["Dashboard"])
 Company = Annotated[dict, Depends(current_company)]
+Owner = Annotated[dict, Depends(owner_company)]
 Intake = Annotated[dict, Depends(intake_company)]
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-
-
-class SessionRequest(StrictModel):
-    company_id: str = Field(max_length=60)
 
 
 class NewCompany(StrictModel):
@@ -129,12 +132,6 @@ class LoginEvent(LoginData):
     actor: str = Field("Integration event", max_length=100)
 
 
-def set_session(response, company_id):
-    response.set_cookie(
-        "decisioniq_session", token(company_id), httponly=True, samesite="strict", max_age=43200
-    )
-
-
 def writable_sales(company):
     if company["source_kind"] == "public":
         raise HTTPException(
@@ -144,29 +141,8 @@ def writable_sales(company):
 
 
 @router.get("/bootstrap")
-def bootstrap():
-    if not demo_enabled():
-        raise HTTPException(404, "The local demonstration is disabled.")
-    return {
-        "demo": True,
-        "companies": [
-            store.company(row["id"])
-            for row in store.rows("SELECT id FROM companies ORDER BY rowid")
-        ],
-        "llm_enabled": False,
-    }
-
-
-@router.post("/demo/session")
-def select_workspace(body: SessionRequest, response: Response):
-    if not demo_enabled():
-        raise HTTPException(404, "The local demonstration is disabled.")
-    try:
-        company = store.company(body.company_id)
-    except ValueError:
-        raise HTTPException(404, "Unknown demonstration workspace") from None
-    set_session(response, body.company_id)
-    return {"company": company, "mode": "local_demo"}
+def bootstrap(user: User):
+    return account_view(user)
 
 
 @router.get("/dashboard")
@@ -175,6 +151,7 @@ def get_dashboard(company: Company, horizon: int = 30):
         raise HTTPException(422, "Choose a 30, 60, or 90 day outlook")
     with store.snapshot():
         value = analytics.dashboard(company["id"], horizon)
+    value["company"]["role"] = company["role"]
     from services.phishing.predict import _load_bundle
 
     try:
@@ -186,42 +163,20 @@ def get_dashboard(company: Company, horizon: int = 30):
 
 
 @router.post("/companies", status_code=201)
-def new_workspace(body: NewCompany, response: Response, company: Company):
-    company_id = "workspace-" + store.uid()[:12]
-    config = {
-        "initials": "".join(word[0] for word in body.name.split()[:2]).upper(),
-        "segment": None,
-        "currency": body.currency,
-        "timezone": body.timezone,
-        "source": "Company-supplied data",
-        "source_kind": "upload",
-        "source_url": None,
-        "sales_basis": "recorded_sales",
-        "description": "Local demonstration upload workspace",
-        "api_state": "upload_only",
-        "calendar_complete": False,
-        "expected_period_end": str(store.now().astimezone(ZoneInfo(body.timezone)).date()),
-        "next_due": (store.now() + timedelta(days=7)).isoformat(),
-        "reminder_hours": 24,
-        "snoozed_until": None,
-    }
+def new_workspace(body: NewCompany, user: User):
     with store.connect() as connection:
+        company_id = store.create_workspace(body.name, body.currency, body.timezone, connection)
         connection.execute(
-            "INSERT INTO companies VALUES (?,?,?)", (company_id, body.name, json.dumps(config))
+            "INSERT INTO memberships VALUES (?,?,'owner')", (user["user_id"], company_id)
         )
-        store.activity(
-            company_id,
-            "workspace",
-            "Workspace created",
-            "Upload a sales file or configure API intake to begin.",
-            connection,
+        connection.execute(
+            "UPDATE sessions SET company_id=? WHERE token_hash=?", (company_id, user["token_hash"])
         )
-    set_session(response, company_id)
-    return store.company(company_id)
+    return {**store.company(company_id), "role": "admin" if user["is_admin"] else "owner"}
 
 
 @router.patch("/settings")
-def settings(body: Policy, company: Company, background_tasks: BackgroundTasks):
+def settings(body: Policy, company: Owner, background_tasks: BackgroundTasks):
     values = body.model_dump(exclude_none=True, mode="json")
     result = store.update_company(company["id"], **values)
     store.activity(
@@ -237,7 +192,7 @@ def settings(body: Policy, company: Company, background_tasks: BackgroundTasks):
 
 
 @router.post("/settings/api-key")
-def rotate_key(company: Company):
+def rotate_key(company: Owner):
     return {
         "key": store.issue_key(company["id"]),
         "message": "Copy this key now. Only its hash is stored; rotating it revokes the previous key.",

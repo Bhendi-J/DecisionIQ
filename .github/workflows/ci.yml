@@ -49,11 +49,12 @@ jobs:
       - run: npx --prefix frontend playwright install --with-deps chrome
       - name: Run local browser workflow checks
         run: |
+          export DECISIONIQ_DB_PATH=/tmp/foresight-browser-ci.sqlite3
           uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8083 > /tmp/decisioniq-server.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           for attempt in $(seq 1 40); do
-            if curl --fail --silent http://127.0.0.1:8083/api/bootstrap > /dev/null; then break; fi
+            if curl --fail --silent http://127.0.0.1:8083/health > /dev/null; then break; fi
             sleep 1
           done
           npm --prefix frontend run test:browser
