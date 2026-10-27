@@ -4,7 +4,7 @@
 **Purpose:** Explain what was built, why it was built this way, how it works, and its current limits.
 **Implementation reviewed:** account access upgrade `f3e4cab`; original dashboard `f28b37c` and service integration `0e157a1`.
 **Delivery:** Local college demonstration on `integration/unified-services`.
-**Trained phishing artifact:** contributor commit `40043eacb0bc0151d0a295667b993fee0a199957`.
+**Trained phishing artifact:** contributor commit `40043eacb0bc0151d0a295667b993fee0a199957`; integration code `db33dd1`.
 **Product name:** ForeSight; renamed from DecisionIQ after the implementation review.
 
 ## 1. Result delivered
@@ -139,7 +139,7 @@ Evaluation reconstructed the supplied training script's 2,000-email CEAS08 test 
 
 A separate short synthetic account-suspension/password-verification lure was not flagged, with a phishing score near 1/100. That observed miss is retained alongside the strong same-source evaluation. The UI labels a negative result **No phishing flag** and states that an unflagged message can still be malicious. Aggregate metrics, versioned artifact details, and reproduction instructions are in `services/phishing/PROVENANCE.md` and `evaluation.json`; raw source emails are not bundled.
 
-Current trained-model integration verification passed 47 backend/model/installer checks on Python 3.11, including the actual pinned weights, native inference versus API output, and readiness with all three services available. All 12 browser workflows passed with the trained phishing model explicitly required, including real email submission and private result storage. The production frontend build and formatting checks also passed.
+Current trained-model integration verification passed 47 backend/model/installer checks on Python 3.11, including the actual pinned weights, native inference versus API output, and readiness with all three services available. All 12 browser workflows passed with the trained phishing model explicitly required, including real email submission and private result storage. The production frontend build and formatting checks also passed. Python 3.12 core verification passed 44 checks, with three optional artifact/Transformers checks skipped because that separate verification environment does not install the phishing extra.
 
 Finance and security are separate in the company dashboard. The legacy combined assessment endpoint remains available with an explicit aggregation policy and coverage state; its composite index is not a validated probability of company failure.
 
