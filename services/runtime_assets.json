@@ -1,0 +1,16 @@
+{
+  "repository": "Bhendi-J/DecisionIQ",
+  "revision": "c0eb03da37439fdb0b9e02ce1422d47790899e2f",
+  "files": [
+    {
+      "path": "services/finance/data/demo_sales.csv",
+      "size": 242131,
+      "sha256": "b4295fda2352c7cba55b58696a17e84681b79f70725a03733e7b6fe202e868c0"
+    },
+    {
+      "path": "services/finance/data/revenue_history.csv",
+      "size": 7192,
+      "sha256": "727dc2774b9f37eea8affd99f885d4bf10e514ef409f4b55880e1c1276fa74d6"
+    }
+  ]
+}

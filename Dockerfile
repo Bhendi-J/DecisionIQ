@@ -25,6 +25,7 @@ RUN if [ "$INSTALL_PHISHING" = "true" ]; then \
 
 COPY decisioniq ./decisioniq
 COPY services ./services
+COPY scripts ./scripts
 COPY --from=dashboard-build /ui/dist ./frontend/dist
 RUN useradd --create-home appuser && chown -R appuser:appuser /app
 USER appuser

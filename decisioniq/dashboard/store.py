@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 
-from decisioniq.config import ROOT, configured_path
+from decisioniq.config import configured_path
 
 _snapshot_connection = ContextVar("dashboard_snapshot_connection", default=None)
 
@@ -75,6 +75,7 @@ def connect():
     path = configured_path("DECISIONIQ_DB_PATH", "data/dashboard.sqlite3")
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=20)
+    os.chmod(path, 0o600)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys=ON")
     try:
@@ -156,8 +157,14 @@ def initialize():
         connection.execute(
             "INSERT OR IGNORE INTO config VALUES ('session_secret',?)", (secrets.token_hex(32),)
         )
+        demo_path = configured_path(
+            "FORESIGHT_DEMO_SALES_PATH", "services/finance/data/demo_sales.csv"
+        )
         if connection.execute("SELECT 1 FROM companies LIMIT 1").fetchone():
-            migrate_public_sales(connection)
+            if demo_path.is_file():
+                migrate_public_sales(connection)
+            return
+        if not demo_path.is_file():
             return
         from zoneinfo import ZoneInfo
 
@@ -312,7 +319,9 @@ def migrate_public_sales(connection):
         "DELETE FROM sales WHERE batch_id='uci-seed' AND company_id IN ('aster','maison','nordhaus')"
     )
     connection.execute("DELETE FROM forecasts WHERE company_id IN ('aster','maison','nordhaus')")
-    with (ROOT / "services/finance/data/demo_sales.csv").open() as handle:
+    with configured_path(
+        "FORESIGHT_DEMO_SALES_PATH", "services/finance/data/demo_sales.csv"
+    ).open() as handle:
         for row in csv.DictReader(handle):
             connection.execute(
                 "INSERT INTO sales VALUES (?,?,?,?,?,?,?,?,?)",

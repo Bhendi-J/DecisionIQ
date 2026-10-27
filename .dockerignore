@@ -18,3 +18,13 @@ frontend/playwright-report
 *.tsbuildinfo
 
 services/phishing/models/
+
+docs/
+reports/
+**/data/
+**/datasets/
+**/evaluation.json
+**/PROVENANCE.md
+*.pdf
+*.csv
+*.xlsx

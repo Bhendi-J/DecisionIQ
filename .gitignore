@@ -23,3 +23,26 @@ node_modules/
 *.tsbuildinfo
 test-results/
 playwright-report/
+
+# Reports and datasets are local artifacts, never source-controlled.
+/docs/
+/reports/
+**/reports/
+**/data/
+**/datasets/
+**/outputs/
+**/PROVENANCE.md
+**/evaluation.json
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+*.arrow
+*.sqlite*
+*.db
+*.pdf
+*.pptx
+
+*_REPORT.md
+*_SUMMARY.md

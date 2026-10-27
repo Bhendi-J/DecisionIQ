@@ -2,7 +2,6 @@
 
 import logging
 from functools import lru_cache
-from pathlib import Path
 
 import pandas as pd
 
@@ -39,8 +38,14 @@ class FinanceService:
             self.forecaster = ProphetForecaster(model_path=str(prophet_path))
             self.risk_model = XGBoostRiskModel(model_path=str(xgb_path))
             self.shap_explainer = SHAPExplainer(xgb_model=self.risk_model.model)
-            history_path = Path(__file__).resolve().parents[2] / "data/revenue_history.csv"
-            self.history = pd.read_csv(history_path, parse_dates=["ds"])
+            history_path = configured_path(
+                "FINANCE_HISTORY_PATH", "services/finance/data/revenue_history.csv"
+            )
+            self.history = (
+                pd.read_csv(history_path, parse_dates=["ds"])
+                if history_path.is_file()
+                else self.forecaster.model.history[["ds", "y"]].copy()
+            )
         except Exception as exc:
             logger.exception("Cannot initialize finance models")
             raise ModelUnavailable(

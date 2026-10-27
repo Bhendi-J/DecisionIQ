@@ -10,4 +10,7 @@ if [[ "${INSTALL_PHISHING:-1}" == "1" ]]; then
 else
   uv sync --locked
 fi
+if [[ "${INSTALL_DEMO_DATA:-1}" == "1" ]]; then
+  uv run --no-sync python -m scripts.install_demo_data
+fi
 exec uv run --no-sync uvicorn decisioniq.main:app --host 127.0.0.1 --port "${DECISIONIQ_PORT:-8082}"

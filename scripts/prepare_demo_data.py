@@ -37,6 +37,7 @@ def main():
         grouped["company_id"] = company
         results.append(grouped)
     output = Path(__file__).resolve().parents[1] / "services/finance/data/demo_sales.csv"
+    output.parent.mkdir(parents=True, exist_ok=True)
     pd.concat(results).to_csv(output, index=False, float_format="%.2f")
     print(f"Saved {output}")
 

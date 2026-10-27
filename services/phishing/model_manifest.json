@@ -9,7 +9,6 @@
     "1": "phishing"
   },
   "max_tokens": 256,
-  "training_description": "Contributor script samples 10,000 CEAS08 records, trains on 7,200 for one epoch, validates on 800, and reserves 2,000 for testing. This description follows the supplied script; it is not an independent training audit.",
   "files": [
     {
       "name": "config.json",
