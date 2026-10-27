@@ -1,5 +1,7 @@
 # ForeSight
 
+**For teammates:** [Visual integration summary](docs/TEAM_INTEGRATION_SUMMARY.md) · [Two-page PDF](docs/ForeSight-Integration-Summary.pdf)
+
 A local, company-focused business intelligence dashboard for a college demonstration. React presents sales outlooks, product performance, independent security signals, data ingestion, and reporting reminders. FastAPI integrates the team's finance, login anomaly, and phishing services.
 
 The interface uses graphite surfaces, warm ivory and brass accents, locally bundled **Manrope** and **Geist Mono** variable fonts, interactive SVG charts, and responsive layouts. There are no external font, analytics, or LLM requests.
@@ -193,4 +195,4 @@ frontend/tests/             Real-browser and accessibility workflows
 
 Raw training datasets, bytecode/caches, duplicate models, generated charts, editor settings, and unused standalone demos are excluded. Active supplied models, training entrypoints, compact attributed samples, and original branch ancestry are retained. Finance artifacts use portable JSON, with original-versus-converted predictions checked. The anomaly artifact retains the matching scikit-learn version.
 
-Integration inputs: finance `a64ec1b`, anomaly `367efb8`, phishing code `e8f8acd` and trained export `40043ea`. The implementation lives on `integration/unified-services` in the separate checkout; no GitHub publication has been authorized.
+Integration inputs: finance `a64ec1b`, anomaly `367efb8`, phishing code `e8f8acd` and trained export `40043ea`. Use `main` for the integrated ForeSight application. The work was prepared on `integration/unified-services` in a separate checkout, preserving the original dirty local checkout and the contributor branch histories.

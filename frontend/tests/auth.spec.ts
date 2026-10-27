@@ -98,10 +98,12 @@ test('company owners grant and remove team access; members cannot manage company
   }
 });
 
-test('sign-in and registration layouts are accessible on desktop and mobile', async ({ page }) => {
+test('sign-in and registration layouts are accessible on desktop and mobile', async ({
+  page,
+}, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
-  await page.screenshot({ path: '/private/tmp/foresight-sign-in.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('sign-in.png'), fullPage: true });
   for (const size of [
     { width: 1440, height: 1000 },
     { width: 390, height: 844 },
@@ -123,5 +125,5 @@ test('sign-in and registration layouts are accessible on desktop and mobile', as
         await page.getByRole('button', { name: 'Sign in instead', exact: true }).click();
     }
   }
-  await page.screenshot({ path: '/private/tmp/foresight-sign-in-mobile.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('sign-in-mobile.png'), fullPage: true });
 });

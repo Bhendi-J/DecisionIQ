@@ -11,7 +11,7 @@ This records the agreed requirements and implementation boundaries as of October
 - Add recurring company reminders for missing or unprocessed data when API intake is paused, and for overdue upload-only companies. API-active companies receive connection/freshness status rather than the paused-intake upload reminder.
 - The primary dashboard serves a company user; a separately identified demo/admin mode can switch among sample companies.
 - External LLM processing is undecided. Do not send company uploads to an external LLM while that decision remains open.
-- Continue using the separate integration checkout. Publishing has not been authorized; the earlier GitHub push was rejected by automatic approval review.
+- Continue using the separate integration checkout. The user explicitly authorized publishing the working integration and summarized team report to `main` on October 27, 2026. The original dirty local checkout remains preserved.
 
 ## Implemented account boundary
 

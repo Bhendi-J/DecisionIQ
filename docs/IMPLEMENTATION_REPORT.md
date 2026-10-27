@@ -11,7 +11,7 @@
 
 ForeSight now has one working React dashboard and one FastAPI application integrating the finance, login-anomaly, and phishing service code. The interface includes sales analysis, uploads, API intake, security analysis, evidence summaries, and reporting reminders.
 
-The implementation was developed in `/private/tmp/decisioniq-integration`. The original local checkout was left untouched. The integration commit preserves the three contributor branch histories. No changes were pushed to GitHub or published as a hosted application.
+The implementation was developed in `/private/tmp/decisioniq-integration`. The original local checkout was left untouched. The integration commit preserves the three contributor branch histories. The user has now authorized publishing the integrated application and the visual team summary to `main`. This code publication does not deploy a hosted website.
 
 The result is a functioning demonstration with real backend processing. Account registration, login, logout, and organization roles have now been added. The trained phishing model is now installed and connected. External GenAI, email verification/recovery, and automatic model promotion remain outside the completed functionality.
 

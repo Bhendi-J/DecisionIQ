@@ -138,7 +138,7 @@ test('search and export are usable controls', async ({ page }) => {
   expect(download.suggestedFilename()).toContain('sales.csv');
 });
 
-test('mobile layout has accessible navigation and no page overflow', async ({ page }) => {
+test('mobile layout has accessible navigation and no page overflow', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -152,7 +152,7 @@ test('mobile layout has accessible navigation and no page overflow', async ({ pa
   ).toBeTruthy();
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await navigate(page, 'Overview');
-  await page.screenshot({ path: '/private/tmp/decisioniq-mobile-verified.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('mobile-overview.png'), fullPage: true });
 });
 
 test('integration controls generate a scoped key and pause real API intake', async ({ page }) => {
