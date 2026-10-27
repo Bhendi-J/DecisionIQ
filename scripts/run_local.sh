@@ -4,8 +4,9 @@ project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"
 npm --prefix frontend ci
 npm --prefix frontend run build
-if [[ "${INSTALL_PHISHING:-0}" == "1" ]]; then
+if [[ "${INSTALL_PHISHING:-1}" == "1" ]]; then
   uv sync --locked --extra phishing
+  uv run --no-sync python -m scripts.install_phishing_model
 else
   uv sync --locked
 fi

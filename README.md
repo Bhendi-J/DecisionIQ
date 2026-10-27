@@ -12,15 +12,16 @@ Requires Python 3.11 or 3.12, Node.js 22+, and [uv](https://docs.astral.sh/uv/).
 ./scripts/run_local.sh
 ```
 
-Open **http://127.0.0.1:8082**. The script installs locked dependencies, builds the dashboard, and runs the local backend. For a different port, use `DECISIONIQ_PORT=8084 ./scripts/run_local.sh`.
+Open **http://127.0.0.1:8082**. The script installs locked dependencies, builds the dashboard, installs the pinned phishing export on first use (about 269 MB including tokenizer/config), and runs the local backend. Verified installed weights are reused without downloading them on later launches. For a different port, use `DECISIONIQ_PORT=8084 ./scripts/run_local.sh`.
 
 Or run the steps separately:
 
 ```bash
-uv sync --locked
+uv sync --locked --extra phishing
 npm --prefix frontend ci
 npm --prefix frontend run build
-uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8082
+uv run --no-sync python -m scripts.install_phishing_model
+uv run --no-sync uvicorn decisioniq.main:app --host 127.0.0.1 --port 8082
 ```
 
 For frontend development, keep FastAPI on port 8082 and run `npm --prefix frontend run dev` in a second terminal. Vite serves port 5173 and proxies API requests. Rebuild the frontend to update the version served directly by FastAPI.
@@ -120,16 +121,26 @@ Reminders are in-app only. There is no real email/SMS delivery. Upload time is s
 
 ## Phishing model
 
-The source branch does not contain trained DistilBERT weights/tokenizer. Until the contributor's complete saved directory is supplied, the UI shows setup required and the direct prediction endpoint returns 503. Other services remain usable.
+The contributor's trained DistilBERT export is now integrated from `email_phishing_detection` commit `40043eacb0bc0151d0a295667b993fee0a199957`. ForeSight uses the actual 267,832,560-byte safetensors file plus its tokenizer/configuration. The large weights remain outside ordinary Git/source ZIPs; the versioned [manifest](services/phishing/model_manifest.json) pins every file's size and SHA-256. The installer uses an existing verified Git LFS object when available, otherwise retrieves the pinned GitHub artifact. All files are verified before the model directory becomes visible to inference. Existing different exports are preserved.
 
-Place the complete artifact under `services/phishing/models/phishing_distilbert/` or set `PHISHING_MODEL_PATH`. Expected labels: 0=legitimate, 1=phishing.
+`./scripts/run_local.sh` now enables the model by default. Use `INSTALL_PHISHING=0 ./scripts/run_local.sh` for the core-only configuration. To install just the model:
 
 ```bash
 uv sync --locked --extra phishing
-uv run --extra phishing uvicorn decisioniq.main:app --host 127.0.0.1 --port 8082
+uv run --no-sync python -m scripts.install_phishing_model
 ```
 
-Or use `INSTALL_PHISHING=1 ./scripts/run_local.sh`. Inference loads local files only, retains the original 256-token limit, reports truncation, and bounds native CPU threads via `PHISHING_TORCH_THREADS` (default 1). Successful manual email analysis stores the result and text length, not raw email text.
+For your own complete local export, set `PHISHING_MODEL_PATH=/absolute/path/to/export` before starting. The installer respects that override instead of downloading the pinned model. Inference loads local files only, preserves the contributor's 256-token input limit and 0=legitimate/1=phishing interpretation, reports truncation, and bounds native CPU threads through `PHISHING_TORCH_THREADS` (default 1). Successful dashboard analysis stores the result and text length, not raw email text. Training checkpoints and `training_args.bin` are not needed or loaded.
+
+Local evaluation reconstructed the contributor script's 2,000-message CEAS08 test split: **99.0% accuracy, 99.49% phishing precision, 98.50% phishing recall**, with 15 false negatives and 5 false positives. No normalized exact-text overlap with the reconstructed training/validation sets was found. This is one random split from one source, with training lineage inferred from the supplied script, not independently certified. A separate short synthetic credential lure was missed, so the UI does not represent an unflagged email as safe. See [provenance and limitations](services/phishing/PROVENANCE.md) and [aggregate evaluation](services/phishing/evaluation.json).
+
+Reproduce the evaluation with the exact source CSV, which is intentionally not bundled:
+
+```bash
+uv run --extra phishing python -m scripts.evaluate_phishing_model --data /path/to/CEAS08_DecisionIQ_clean.csv
+```
+
+If weights are absent or cannot load, email analysis remains explicitly unavailable while the other services continue working.
 
 ## Verify
 
@@ -140,7 +151,13 @@ uv run ruff format --check .
 npm --prefix frontend run build
 ```
 
-The optional phishing adapter test creates a tiny untrained temporary fixture to verify actual Transformers loading/inference; that fixture is never deployed as the phishing model. Core tests also run without the optional extra, with that adapter test skipped.
+The optional phishing adapter test creates a tiny untrained temporary fixture to verify actual Transformers loading/inference; that fixture is never deployed as the phishing model. Core tests also run without the optional extra, with that adapter test skipped. Actual contributor-weight checks are opt-in:
+
+```bash
+PHISHING_RUN_ARTIFACT_TESTS=1 uv run --extra phishing pytest -q
+```
+
+These additionally verify the pinned trained weights, native logits versus API output, health/readiness, and private company event storage.
 
 For browser verification, run a second backend with a separate database:
 
@@ -151,7 +168,7 @@ uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8083
 npm --prefix frontend run test:browser
 ```
 
-Browser setup provisions a randomly credentialed test administrator in that separate database; it refuses to use the default application database. Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, mobile layout, registration/login/logout, session loss, team permissions, and membership revocation. Test runtime data and screenshots are ignored.
+Set `FORESIGHT_REQUIRE_PHISHING=1` when running browser checks against an installed trained model to require real email inference. Without it, missing-model UI behavior remains covered on core-only installations. Browser setup provisions a randomly credentialed test administrator in that separate database; it refuses to use the default application database. Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, mobile layout, registration/login/logout, session loss, team permissions, and membership revocation. Test runtime data and screenshots are ignored.
 
 ## Docker
 
@@ -176,4 +193,4 @@ frontend/tests/             Real-browser and accessibility workflows
 
 Raw training datasets, bytecode/caches, duplicate models, generated charts, editor settings, and unused standalone demos are excluded. Active supplied models, training entrypoints, compact attributed samples, and original branch ancestry are retained. Finance artifacts use portable JSON, with original-versus-converted predictions checked. The anomaly artifact retains the matching scikit-learn version.
 
-Integration inputs: finance `a64ec1b`, anomaly `367efb8`, phishing `e8f8acd`. The implementation lives on `integration/unified-services` in the separate checkout; no GitHub publication has been authorized.
+Integration inputs: finance `a64ec1b`, anomaly `367efb8`, phishing code `e8f8acd` and trained export `40043ea`. The implementation lives on `integration/unified-services` in the separate checkout; no GitHub publication has been authorized.

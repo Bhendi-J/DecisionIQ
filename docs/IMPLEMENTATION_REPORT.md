@@ -1,9 +1,10 @@
 # ForeSight — Integration and Implementation Report
 
-**Prepared:** 25 October 2026
+**Prepared:** 27 October 2026
 **Purpose:** Explain what was built, why it was built this way, how it works, and its current limits.
 **Implementation reviewed:** account access upgrade `f3e4cab`; original dashboard `f28b37c` and service integration `0e157a1`.
 **Delivery:** Local college demonstration on `integration/unified-services`.
+**Trained phishing artifact:** contributor commit `40043eacb0bc0151d0a295667b993fee0a199957`.
 **Product name:** ForeSight; renamed from DecisionIQ after the implementation review.
 
 ## 1. Result delivered
@@ -12,7 +13,7 @@ ForeSight now has one working React dashboard and one FastAPI application integr
 
 The implementation was developed in `/private/tmp/decisioniq-integration`. The original local checkout was left untouched. The integration commit preserves the three contributor branch histories. No changes were pushed to GitHub or published as a hosted application.
 
-The result is a functioning demonstration with real backend processing. Account registration, login, logout, and organization roles have now been added. External GenAI, email verification/recovery, automatic model promotion, and trained phishing predictions remain outside the completed functionality.
+The result is a functioning demonstration with real backend processing. Account registration, login, logout, and organization roles have now been added. The trained phishing model is now installed and connected. External GenAI, email verification/recovery, and automatic model promotion remain outside the completed functionality.
 
 ## 2. What changed and why
 
@@ -128,9 +129,17 @@ Login analysis uses the supplied Isolation Forest model. Inputs include login ho
 
 Preloaded login events are explicitly labeled synthetic and remain separate from the public retail transactions. Company API events and manually analyzed inputs carry their own provenance. An anomaly requires review; it does not establish a confirmed breach.
 
-The phishing service adapter supports local DistilBERT inference, local-only artifact loading, a 256-token limit, and truncation reporting. The contributor branch did not supply the trained weights and tokenizer. Consequently, the demo shows setup required and prediction returns an explicit unavailable response rather than fabricated results.
+The contributor has now supplied the trained DistilBERT export in commit `40043ea`. Its weight file is 267,832,560 bytes, with a total inference export of 268,545,235 bytes including tokenizer/configuration. ForeSight installs those files from pinned URLs or a verified local Git LFS object and checks every size and SHA-256 before publishing the model directory. The standard launcher enables this model by default. Large weights stay outside ordinary source commits and source ZIPs.
 
-The optional adapter test uses a tiny untrained temporary model to verify loading and inference plumbing. This does not validate phishing accuracy and is never installed as the demonstration's trained model. When real email analysis is enabled, successful dashboard analysis stores the result and text length rather than the raw email text.
+The model loads locally and is connected to authenticated company email analysis. The service preserves a 256-token input limit, reports excluded trailing content, and uses class 1 as phishing according to the contributor's prediction script. This integration uses the supplied weights unchanged and does not retrain them. Missing or unloadable artifacts still produce an explicit unavailable state.
+
+Separate checks verify the real pinned artifact, native logits against API output, health/readiness, and company event storage. The optional adapter test also uses a tiny untrained temporary model to verify loading and inference plumbing. This does not validate phishing accuracy and is never installed as the demonstration's trained model. When real email analysis is enabled, successful dashboard analysis stores the result and text length rather than the raw email text.
+
+Evaluation reconstructed the supplied training script's 2,000-email CEAS08 test split, using the unchanged 34,390-row source CSV. Accuracy was 99.00%, phishing precision 99.49%, recall 98.50%, and F1 98.99%. There were 15 missed phishing emails and 5 false alarms. No normalized exact-text overlap with reconstructed training/validation messages was found. This is one reconstructed random split, with training lineage inferred from the supplied script, not an independent external or temporal benchmark.
+
+A separate short synthetic account-suspension/password-verification lure was not flagged, with a phishing score near 1/100. That observed miss is retained alongside the strong same-source evaluation. The UI labels a negative result **No phishing flag** and states that an unflagged message can still be malicious. Aggregate metrics, versioned artifact details, and reproduction instructions are in `services/phishing/PROVENANCE.md` and `evaluation.json`; raw source emails are not bundled.
+
+Current trained-model integration verification passed 47 backend/model/installer checks on Python 3.11, including the actual pinned weights, native inference versus API output, and readiness with all three services available. All 12 browser workflows passed with the trained phishing model explicitly required, including real email submission and private result storage. The production frontend build and formatting checks also passed.
 
 Finance and security are separate in the company dashboard. The legacy combined assessment endpoint remains available with an explicit aggregation policy and coverage state; its composite index is not a validated probability of company failure.
 
@@ -188,19 +197,19 @@ The clean source archive excludes virtual environments, installed JavaScript dep
 
 ## 10. Remaining work and recommended sequence
 
-**Status updated after the account access upgrade, 25 October 2026.** The original list mixed implementation work, user review, outside artifacts, and privacy decisions. Adding authentication completed part of that list; it did not complete every item.
+**Status updated after the account and trained-model integrations, 27 October 2026.** The original list mixed implementation work, user review, outside artifacts, and privacy decisions. Adding authentication completed part of that list; it did not complete every item.
 
 | Original item | Current status and remaining work |
 | --- | --- |
 | 1. Review the interface and demonstration story | **Automated engineering checks completed; user review pending.** Browser tests exercise public sample switching and uploading/processing a separate sales history through forecasting. The project team still needs to review the actual presentation and confirm that the interface tells the intended story. |
-| 2. Supply and evaluate the phishing model | **Adapter implemented; trained model still missing.** Obtain the contributor's complete saved model/tokenizer and evaluate it on held-out labeled emails. Temporary adapter fixtures do not establish phishing accuracy. Other services remain usable. |
+| 2. Supply and evaluate the phishing model | **Artifact integrated and source-split evaluation completed.** The pinned trained model/tokenizer load locally and are connected to the company UI/API. The reconstructed 2,000-email source test split scored 99.00% accuracy, with 15 misses and 5 false alarms. External/temporal validation, training-lineage confirmation, and false-negative review remain open; this is not a universal accuracy claim. |
 | 3. Decide the LLM privacy boundary | **Decision pending; external LLM processing disabled.** The current application sends no uploads to an LLM and does not fine-tune a shared LLM. Agree local versus external inference, allowed fields, consent, retention, and logging before enabling a provider. Public availability alone does not establish that data is anonymous or licensed for every use. |
 | 4. Add evaluated GenAI schema assistance | **Manual/rule-based mapping and confirmation implemented; GenAI assistance pending.** Alias suggestions, explicit date/decimal conventions, validation, and user confirmation already work. A future LLM should only propose mappings; ambiguous cases need review before validated transformations affect stored records. |
 | 5. Strengthen access and deployment for real organizations | **Account access portion completed; operational work remains.** Registration, login/logout, company memberships, owner/member/admin permissions, and admin restrictions on legacy endpoints are implemented. Email verification, password recovery, optional MFA, retention/deletion controls, secure deployment, backup/restore procedures, and organization identity verification remain incomplete. |
 | 6. Make processing durable across restarts | **Pending.** Accepted batches and sales records persist in SQLite, but background jobs run in the web process. Work interrupted by a restart is not automatically recovered. Add persisted job claims/status, retries, stale-job recovery, idempotent execution, and a worker that can resume accepted jobs independently of web requests. |
 | 7. Broaden evaluation and control model promotion | **Initial evaluation implemented; broader evaluation and model lifecycle pending.** The sales service compares Prophet with a weekly baseline on one final 28-day holdout. Add evaluation over several time windows and relevant sources, retain evaluation reports and model versions, and support controlled promotion/rollback. Per-company XGBoost/Random Forest classifiers require meaningful labeled outcomes before training or deployment can be justified. |
 
-For the college demonstration, the next implementation priority is **item 6**, followed by the multi-window forecast evaluation part of **item 7**. These can be developed locally without selecting an LLM provider. Continue team review under item 1 and obtain the phishing artifact in parallel when it is available. Keep GenAI disabled until item 3 is settled; item 4 can then build on the working manual pipeline.
+For the college demonstration, the next implementation priority is **item 6**, followed by the multi-window forecast evaluation part of **item 7**. These can be developed locally without selecting an LLM provider. Continue team review under item 1 and broaden the phishing evaluation under item 2 beyond the reconstructed source split. Keep GenAI disabled until item 3 is settled; item 4 can then build on the working manual pipeline.
 
 Before using real company records, complete the remaining identity, retention, deployment, and backup work under item 5. This is a separate readiness requirement from demonstrating the current public-data application.
 
@@ -227,7 +236,7 @@ cd /private/tmp/decisioniq-integration
 ./scripts/run_local.sh
 ```
 
-After startup, open `http://127.0.0.1:8082`. The script installs locked dependencies, builds the frontend, and starts the local backend. The temporary verification servers were stopped after testing, so the launch command is required to reopen the application.
+After startup, open `http://127.0.0.1:8082`. The script installs locked dependencies, builds the frontend, verifies/installs the pinned phishing model, and starts the local backend. Set `INSTALL_PHISHING=0` for a core-only installation. The temporary verification servers were stopped after testing, so the launch command is required to reopen the application.
 
 For source-level details, see `README.md`, `docs/PRODUCT_SCOPE.md`, the dashboard modules, and the test suites. The report describes the implementation as reviewed; unresolved features above remain future work.
 

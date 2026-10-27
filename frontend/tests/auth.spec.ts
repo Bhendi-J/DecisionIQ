@@ -56,6 +56,7 @@ test('registration creates a private company; login, reload, and logout use the 
 test('company owners grant and remove team access; members cannot manage company credentials', async ({
   page,
   browser,
+  baseURL,
 }) => {
   const stamp = Date.now();
   const peerContext = await browser.newContext({

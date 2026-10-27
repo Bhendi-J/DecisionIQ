@@ -16,3 +16,5 @@ frontend/dist
 frontend/test-results
 frontend/playwright-report
 *.tsbuildinfo
+
+services/phishing/models/

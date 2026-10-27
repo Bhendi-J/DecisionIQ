@@ -1,0 +1,35 @@
+{
+  "name": "ForeSight phishing DistilBERT",
+  "repository": "Bhendi-J/DecisionIQ",
+  "revision": "40043eacb0bc0151d0a295667b993fee0a199957",
+  "source_path": "model/phishing_distilbert",
+  "source_url": "https://github.com/Bhendi-J/DecisionIQ/tree/40043eacb0bc0151d0a295667b993fee0a199957/model/phishing_distilbert",
+  "labels": {
+    "0": "legitimate",
+    "1": "phishing"
+  },
+  "max_tokens": 256,
+  "training_description": "Contributor script samples 10,000 CEAS08 records, trains on 7,200 for one epoch, validates on 800, and reserves 2,000 for testing. This description follows the supplied script; it is not an independent training audit.",
+  "files": [
+    {
+      "name": "config.json",
+      "size": 663,
+      "sha256": "15c0a6a72f1c0497415059b9317cf014a0067ecb79f369c7d011b30a26feeb1d"
+    },
+    {
+      "name": "tokenizer.json",
+      "size": 711661,
+      "sha256": "0d3aef594edd5f9b53e7f814277a9171dc70ff93eb66bda6e01f7aa53997d963"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "size": 351,
+      "sha256": "e1c2a61a99bda00f6c55303a210b30e2f92dcf8b555e215812e2eb583e177ffd"
+    },
+    {
+      "name": "model.safetensors",
+      "size": 267832560,
+      "sha256": "ade2acdd1f0aec1773937816d33e6cfc0856ff5982aae9e49c34926c6d942a9b"
+    }
+  ]
+}

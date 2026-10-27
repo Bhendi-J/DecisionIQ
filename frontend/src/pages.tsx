@@ -915,7 +915,13 @@ export function Security(props: Props) {
             </p>
           </div>
         </div>
-        <Badge tone="sage">Login model available</Badge>
+        <Badge tone={tab === 'email' && d.phishing_status !== 'ready' ? 'brass' : 'sage'}>
+          {tab === 'logins'
+            ? 'Login model available'
+            : d.phishing_status === 'ready'
+              ? 'Email model available'
+              : 'Email model setup required'}
+        </Badge>
       </div>
       <div className="subtabs">
         <button
@@ -997,8 +1003,8 @@ export function Security(props: Props) {
                 <div className="notice">
                   <strong>Trained model required</strong>
                   <p>
-                    The inference service is connected, but Jiya's saved model and tokenizer are not
-                    installed. No substitute prediction will be generated.
+                    The trained email classifier is not installed on this server. Run the model
+                    installer or configure a local model directory to enable analysis.
                   </p>
                 </div>
               )}
@@ -1019,12 +1025,19 @@ export function Security(props: Props) {
               </>
             )}
           </button>
+          {result?.truncated === true && (
+            <div className="notice">
+              Only the first 256 tokens were analyzed. The rest of this message was excluded.
+            </div>
+          )}
           {result && (
             <div className="analysis-result">
               <Badge tone={result.is_anomaly || result.is_phishing ? 'rose' : 'sage'}>
                 {result.is_anomaly || result.is_phishing
                   ? 'Flagged for review'
-                  : 'No anomaly detected'}
+                  : tab === 'email'
+                    ? 'No phishing flag'
+                    : 'No anomaly detected'}
               </Badge>
               <strong>
                 {String(result.risk_score)}
@@ -1033,7 +1046,7 @@ export function Security(props: Props) {
               <p>
                 {tab === 'logins'
                   ? 'Transformed Isolation Forest score. This is not a calibrated probability of account compromise.'
-                  : 'Phishing model score for this message only.'}
+                  : 'Model score for this message only. An unflagged message can still be malicious.'}
               </p>
             </div>
           )}
@@ -1042,10 +1055,11 @@ export function Security(props: Props) {
           <div className="context-item">
             <span>01</span>
             <div>
-              <h3>Behavior, not identity</h3>
+              <h3>{tab === 'email' ? 'Message-level evidence' : 'Behavior, not identity'}</h3>
               <p>
-                Isolation Forest looks for unusual combinations of login hour, failed attempts,
-                device, frequency, and location.
+                {tab === 'email'
+                  ? 'DistilBERT evaluates the wording of the first 256 tokens. Longer messages are truncated, and the result applies to this input only.'
+                  : 'Isolation Forest looks for unusual combinations of login hour, failed attempts, device, frequency, and location.'}
               </p>
             </div>
           </div>
@@ -1054,8 +1068,9 @@ export function Security(props: Props) {
             <div>
               <h3>Review before acting</h3>
               <p>
-                A flag is an investigation signal. Travel, a new device, or unusual working hours
-                can have legitimate explanations.
+                {tab === 'email'
+                  ? 'An unflagged message can still be malicious. Review the sender and link destinations before trusting a request.'
+                  : 'A flag is an investigation signal. Travel, a new device, or unusual working hours can have legitimate explanations.'}
               </p>
             </div>
           </div>
@@ -1064,8 +1079,9 @@ export function Security(props: Props) {
             <div>
               <h3>Keep provenance attached</h3>
               <p>
-                Preloaded login events are synthetic examples, separate from the UCI sales history.
-                Manually analyzed events are labeled separately.
+                {tab === 'email'
+                  ? 'The contributor’s trained export was evaluated on a reconstructed historical CEAS08 test split. Performance can differ on new sources and current company emails.'
+                  : 'Preloaded login events are synthetic examples, separate from the UCI sales history. Manually analyzed events are labeled separately.'}
               </p>
             </div>
           </div>
@@ -1117,7 +1133,9 @@ export function Security(props: Props) {
                           ? 'Unavailable'
                           : event.result.is_anomaly || event.result.is_phishing
                             ? 'Review'
-                            : 'Normal'}
+                            : event.kind === 'email'
+                              ? 'Not flagged'
+                              : 'Normal'}
                       </Badge>
                     </td>
                     <td className="numeric">

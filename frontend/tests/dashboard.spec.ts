@@ -98,14 +98,31 @@ test('sales assumptions change a conditional estimate and can be reset', async (
   await expect(page.locator('.scenario-result strong')).toHaveText(original);
 });
 
-test('login analysis calls the real model; phishing absence is explicit', async ({ page }) => {
+test('security analysis calls real models and exposes missing artifacts', async ({ page }) => {
   await navigate(page, 'Security');
   await page.getByRole('button', { name: 'Analyze login', exact: true }).click();
   await expect(page.locator('.analysis-result')).toBeVisible();
   await expect(page.locator('.analysis-result')).toContainText('calibrated probability');
   await page.getByRole('button', { name: 'Email analysis', exact: true }).click();
-  await expect(page.getByText('Trained model required', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Analyze email', exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('heading', { name: 'Message-level evidence', exact: true }),
+  ).toBeVisible();
+  const dashboard = await (await page.request.get('/api/dashboard')).json();
+  if (process.env.FORESIGHT_REQUIRE_PHISHING === '1')
+    expect(dashboard.phishing_status).toBe('ready');
+  if (dashboard.phishing_status === 'ready') {
+    await page
+      .getByLabel('Email content', { exact: true })
+      .fill('Team meeting tomorrow at 10 AM. Please review the agenda before joining.');
+    await page.getByRole('button', { name: 'Analyze email', exact: true }).click();
+    await expect(page.locator('.analysis-result')).toContainText(
+      'Model score for this message only.',
+    );
+    await expect(page.locator('main')).toContainText('Manual analysis');
+  } else {
+    await expect(page.getByText('Trained model required', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Analyze email', exact: true })).toBeDisabled();
+  }
 });
 
 test('search and export are usable controls', async ({ page }) => {

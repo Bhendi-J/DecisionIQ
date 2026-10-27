@@ -1,6 +1,6 @@
 # ForeSight demonstration scope
 
-This records the agreed requirements and implementation boundaries as of October 25, 2026. The local dashboard implements sales ingestion/analysis, independent security signals, company-scoped demo workspaces, and in-app reporting reminders. Items described as future capabilities remain outside the current demonstration.
+This records the agreed requirements and implementation boundaries as of October 27, 2026. The local dashboard implements sales ingestion/analysis, independent security signals, company-scoped demo workspaces, and in-app reporting reminders. Items described as future capabilities remain outside the current demonstration.
 
 ## Confirmed requirements
 
@@ -104,7 +104,7 @@ Use in-app notifications first. Cadence defaults to 24 hours and is configurable
 
 - Companies configure their reporting due dates, coverage, and reminder cadence in Activity. There is no inferred reporting schedule from public sales records.
 - Select the LLM privacy boundary and provider before enabling external processing. Current schema suggestions use aliases plus manual confirmation; narratives use deterministic templates.
-- Obtain the trained phishing artifact to enable email predictions.
+- The trained phishing artifact from `40043ea` is installed by the standard launcher and was evaluated on the reconstructed source test split. Broader external/temporal validation and false-negative review remain necessary for stronger reliability claims.
 - Account authentication and company membership now exist. Email verification, password recovery, MFA, organization verification, and production operations remain future work.
 
 ## Sources

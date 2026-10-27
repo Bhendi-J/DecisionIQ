@@ -1,0 +1,62 @@
+{
+  "model_sha256": "ade2acdd1f0aec1773937816d33e6cfc0856ff5982aae9e49c34926c6d942a9b",
+  "contributor_revision": "40043eacb0bc0151d0a295667b993fee0a199957",
+  "dataset_sha256": "4793ba3dbbba52b44ec84819ef5e23ab63e373273568bdfd57ac7206fbca51a4",
+  "dataset_rows": 34390,
+  "sampled_rows": 10000,
+  "training_rows": 7200,
+  "validation_rows": 800,
+  "reconstructed_test": {
+    "count": 2000,
+    "accuracy": 0.99,
+    "phishing_precision": 0.9949392712550608,
+    "phishing_recall": 0.9849699398797596,
+    "phishing_f1": 0.9899295065458208,
+    "confusion_matrix": [
+      [
+        997,
+        5
+      ],
+      [
+        15,
+        983
+      ]
+    ],
+    "confusion_matrix_order": "rows=actual [legitimate, phishing]; columns=predicted [legitimate, phishing]"
+  },
+  "overlap_filtered_test": {
+    "count": 2000,
+    "accuracy": 0.99,
+    "phishing_precision": 0.9949392712550608,
+    "phishing_recall": 0.9849699398797596,
+    "phishing_f1": 0.9899295065458208,
+    "confusion_matrix": [
+      [
+        997,
+        5
+      ],
+      [
+        15,
+        983
+      ]
+    ],
+    "confusion_matrix_order": "rows=actual [legitimate, phishing]; columns=predicted [legitimate, phishing]"
+  },
+  "test_rows_matching_training_or_validation": 0,
+  "max_tokens": 256,
+  "phishing_threshold": 0.5,
+  "batch_size": 16,
+  "limitations": [
+    "The split is reconstructed from the supplied train.py (10,000 sampled rows, seed 42). The actual training lineage is not independently certified.",
+    "Overlap filtering removes normalized exact text matches, not near duplicates or shared email threads.",
+    "This is one source and one random split, not an external, temporal, or company-specific validation.",
+    "Phishing scores are model outputs, not calibrated probabilities of organizational compromise."
+  ],
+  "runtime_versions": {
+    "torch": "2.14.1",
+    "transformers": "5.20.2",
+    "tokenizers": "0.23.3",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.1.0"
+  }
+}
