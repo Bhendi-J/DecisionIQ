@@ -170,7 +170,7 @@ uv run uvicorn decisioniq.main:app --host 127.0.0.1 --port 8083
 npm --prefix frontend run test:browser
 ```
 
-Set `FORESIGHT_REQUIRE_PHISHING=1` when running browser checks against an installed trained model to require real email inference. Without it, missing-model UI behavior remains covered on core-only installations. Browser setup provisions a randomly credentialed test administrator in that separate database; it refuses to use the default application database. Browser checks use installed Google Chrome. GitHub CI installs it explicitly. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, mobile layout, registration/login/logout, session loss, team permissions, and membership revocation. Test runtime data and screenshots are ignored.
+Set `FORESIGHT_REQUIRE_PHISHING=1` when running browser checks against an installed trained model to require real email inference. Without it, missing-model UI behavior remains covered on core-only installations. Browser setup provisions a randomly credentialed test administrator in that separate database; it refuses to use the default application database. Browser checks use installed Google Chrome. GitHub CI reuses the Ubuntu runner’s installed Chrome and installs it only if absent. Tests cover navigation, fonts, distinct workspaces, the upload-to-forecast workflow, conditional scenarios, real login analysis, search/export, integration controls, reporting schedules, snooze persistence, mobile layout, registration/login/logout, session loss, team permissions, and membership revocation. Test runtime data and screenshots are ignored.
 
 ## Docker
 

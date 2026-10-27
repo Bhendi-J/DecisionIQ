@@ -32,6 +32,7 @@ jobs:
       - run: uv run pytest -q
   browser:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -46,7 +47,14 @@ jobs:
       - run: uv sync --locked
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend run build
-      - run: npx --prefix frontend playwright install --with-deps chrome
+      - name: Use hosted Chrome or install it when absent
+        timeout-minutes: 3
+        run: |
+          if command -v google-chrome > /dev/null; then
+            google-chrome --version
+          else
+            npx --prefix frontend playwright install --with-deps chrome
+          fi
       - name: Run local browser workflow checks
         run: |
           export DECISIONIQ_DB_PATH=/tmp/foresight-browser-ci.sqlite3
