@@ -23,6 +23,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
@@ -1432,15 +1433,42 @@ export function ActivityPage({ data: d, refresh, toast }: Props) {
   );
 }
 export function ModelLab({ data: d }: Props) {
-  const [revenue, setRevenue] = useState(50000),
-    [opex, setOpex] = useState(35000),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+  const [tab, setTab] = useState<'what_if' | 'single'>('what_if');
+  const [revenue, setRevenue] = useState(50000);
+  const [opex, setOpex] = useState(35000);
+  const [receivables, setReceivables] = useState(45);
+  const [loanBalance, setLoanBalance] = useState(20000);
+
+  // What-If scenario shift inputs
+  const [revChange, setRevChange] = useState(-10);
+  const [expChange, setExpChange] = useState(15);
+  const [recDaysChange, setRecDaysChange] = useState(10);
+  const [loanChange, setLoanChange] = useState(0);
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  // Single profile result
   const [result, setResult] = useState<{
     risk_probability: number;
     shap_features: { feature: string; direction: string; magnitude: number }[];
   } | null>(null);
-  async function run() {
+
+  // What-If simulation result
+  const [simResult, setSimResult] = useState<{
+    original_risk_score: number;
+    simulated_risk_score: number;
+    risk_score_delta: number;
+    original_composite_score: number;
+    simulated_composite_score: number;
+    original_shap: { feature: string; direction: string; magnitude: number }[];
+    simulated_shap: { feature: string; direction: string; magnitude: number }[];
+    summary_message: string;
+  } | null>(null);
+
+  const [shapView, setShapView] = useState<'simulated' | 'baseline'>('simulated');
+
+  async function runSingle() {
     setBusy(true);
     setError('');
     try {
@@ -1458,6 +1486,44 @@ export function ModelLab({ data: d }: Props) {
       setBusy(false);
     }
   }
+
+  async function runSimulation() {
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/finance/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        body: JSON.stringify({
+          base_input: {
+            revenue_usd: revenue,
+            opex_usd: opex,
+            accounts_receivable_days: receivables,
+            loan_balance_usd: loanBalance,
+          },
+          revenue_change_pct: revChange,
+          expenses_change_pct: expChange,
+          receivable_days_change: recDaysChange,
+          loan_balance_change_pct: loanChange,
+        }),
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.detail);
+      setSimResult(value);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function resetShifts() {
+    setRevChange(0);
+    setExpChange(0);
+    setRecDaysChange(0);
+    setLoanChange(0);
+  }
+
   return (
     <>
       <div className="notice lab-notice">
@@ -1471,79 +1537,340 @@ export function ModelLab({ data: d }: Props) {
           </p>
         </div>
       </div>
-      <div className="two-columns">
-        <Panel title="Explore the original finance model" eyebrow="EXPERIMENTAL">
-          <div className="form-stack">
-            <label>
-              Sample monthly revenue (USD)
-              <input
-                type="number"
-                min="0"
-                value={revenue}
-                onChange={(e) => setRevenue(Number(e.target.value))}
-              />
-            </label>
-            <label>
-              Sample operating expenditure (USD)
-              <input
-                type="number"
-                min="0"
-                value={opex}
-                onChange={(e) => setOpex(Number(e.target.value))}
-              />
-            </label>
-          </div>
-          <p className="micro-copy">
-            Other inputs use the model's documented default sample profile. This does not fill
-            missing data in your workspace.
-          </p>
-          {error && <ErrorBox>{error}</ErrorBox>}
-          <button className="button secondary" disabled={busy} onClick={run}>
-            {busy ? (
-              <Spinner />
-            ) : (
-              <>
-                <Play size={14} />
-                Run sample profile
-              </>
-            )}
-          </button>
-        </Panel>
-        <Panel title="Model output & contributors" eyebrow="NATIVE TREESHAP">
-          {result ? (
-            <>
-              <div className="lab-score">
-                <strong>
-                  {(result.risk_probability * 100).toFixed(1)}
-                  <small>/100</small>
-                </strong>
-                <Badge tone="brass">Experimental score</Badge>
-              </div>
-              <div className="shap-list">
-                {result.shap_features.map((item) => (
-                  <div key={item.feature}>
-                    <span>{item.feature.replaceAll('_', ' ')}</span>
-                    <span className={item.direction === 'increases_risk' ? 'negative' : 'positive'}>
-                      {item.direction === 'increases_risk' ? '+' : '−'}
-                      {item.magnitude.toFixed(3)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="micro-copy">
-                Contributions are in log-odds. They explain the model, and do not establish causal
-                effects.
-              </p>
-            </>
-          ) : (
-            <Empty
-              icon={SlidersHorizontal}
-              title="Inspect a sample prediction"
-              detail="Run the sample profile to examine the score and the features behind it."
-            />
-          )}
-        </Panel>
+
+      <div className="subtabs">
+        <button
+          className={tab === 'what_if' ? 'selected' : ''}
+          onClick={() => setTab('what_if')}
+        >
+          What-If Scenario Simulation
+        </button>
+        <button
+          className={tab === 'single' ? 'selected' : ''}
+          onClick={() => setTab('single')}
+        >
+          Single Profile Baseline
+        </button>
       </div>
+
+      {tab === 'what_if' ? (
+        <div className="two-columns">
+          <Panel title="What-If financial scenario controls" eyebrow="IN-MEMORY SIMULATION">
+            <div className="form-stack">
+              <span className="eyebrow" style={{ marginTop: 2, marginBottom: 2 }}>
+                BASELINE FINANCIAL PROFILE
+              </span>
+              <div className="two-columns" style={{ gap: 12 }}>
+                <label>
+                  Monthly revenue (USD)
+                  <input
+                    type="number"
+                    min="0"
+                    value={revenue}
+                    onChange={(e) => setRevenue(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  Operating expenditure (USD)
+                  <input
+                    type="number"
+                    min="0"
+                    value={opex}
+                    onChange={(e) => setOpex(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+              <div className="two-columns" style={{ gap: 12 }}>
+                <label>
+                  Receivable days
+                  <input
+                    type="number"
+                    min="0"
+                    value={receivables}
+                    onChange={(e) => setReceivables(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  Loan balance (USD)
+                  <input
+                    type="number"
+                    min="0"
+                    value={loanBalance}
+                    onChange={(e) => setLoanBalance(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+
+              <div className="sim-controls-section">
+                <span className="eyebrow">WHAT-IF SCENARIO SHIFTS</span>
+                <div className="form-stack" style={{ gap: 14 }}>
+                  <label>
+                    <div className="slider-label">
+                      <span>Revenue adjustment</span>
+                      <span className="slider-val">
+                        {revChange > 0 ? `+${revChange}%` : `${revChange}%`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="1"
+                      value={revChange}
+                      onChange={(e) => setRevChange(Number(e.target.value))}
+                    />
+                  </label>
+
+                  <label>
+                    <div className="slider-label">
+                      <span>Operating expenditure adjustment</span>
+                      <span className="slider-val">
+                        {expChange > 0 ? `+${expChange}%` : `${expChange}%`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="1"
+                      value={expChange}
+                      onChange={(e) => setExpChange(Number(e.target.value))}
+                    />
+                  </label>
+
+                  <label>
+                    <div className="slider-label">
+                      <span>Accounts receivable days shift</span>
+                      <span className="slider-val">
+                        {recDaysChange > 0 ? `+${recDaysChange} days` : `${recDaysChange} days`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-30"
+                      max="60"
+                      step="1"
+                      value={recDaysChange}
+                      onChange={(e) => setRecDaysChange(Number(e.target.value))}
+                    />
+                  </label>
+
+                  <label>
+                    <div className="slider-label">
+                      <span>Loan balance adjustment</span>
+                      <span className="slider-val">
+                        {loanChange > 0 ? `+${loanChange}%` : `${loanChange}%`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="1"
+                      value={loanChange}
+                      onChange={(e) => setLoanChange(Number(e.target.value))}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <p className="micro-copy" style={{ marginTop: 14 }}>
+              Simulations run strictly in-memory without altering recorded company sales, accounts, or database rows.
+            </p>
+
+            {error && <ErrorBox>{error}</ErrorBox>}
+
+            <div className="sim-actions">
+              <button className="button primary" disabled={busy} onClick={runSimulation}>
+                {busy ? (
+                  <Spinner />
+                ) : (
+                  <>
+                    <Play size={14} />
+                    Run What-If Simulation
+                  </>
+                )}
+              </button>
+              <button
+                className="button secondary"
+                disabled={busy}
+                onClick={resetShifts}
+                title="Reset scenario shifts"
+              >
+                <RotateCcw size={14} />
+                Reset
+              </button>
+            </div>
+          </Panel>
+
+          <Panel title="Simulation impact & TreeSHAP explainability" eyebrow="TREESHAP ATTRIBUTION">
+            {simResult ? (
+              <>
+                <div className="sim-comparison-bar">
+                  <div className="sim-score-box">
+                    <span className="eyebrow">BASELINE RISK</span>
+                    <div className="sim-score-val">
+                      {(simResult.original_risk_score * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <ArrowRight size={20} style={{ opacity: 0.6, margin: '14px 4px 0' }} />
+                  <div className="sim-score-box highlight">
+                    <span className="eyebrow">SIMULATED RISK</span>
+                    <div className="sim-score-val">
+                      {(simResult.simulated_risk_score * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div style={{ marginLeft: 'auto', marginTop: 14 }}>
+                    <Badge
+                      tone={
+                        simResult.risk_score_delta > 0.005
+                          ? 'rose'
+                          : simResult.risk_score_delta < -0.005
+                          ? 'sage'
+                          : 'neutral'
+                      }
+                    >
+                      {simResult.risk_score_delta > 0
+                        ? `+${(simResult.risk_score_delta * 100).toFixed(1)}% risk`
+                        : `${(simResult.risk_score_delta * 100).toFixed(1)}% risk`}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div
+                  className={`sim-summary-box ${
+                    simResult.risk_score_delta > 0.05
+                      ? 'rose'
+                      : simResult.risk_score_delta < -0.05
+                      ? 'sage'
+                      : ''
+                  }`}
+                >
+                  <strong>Outcome:</strong> {simResult.summary_message}
+                </div>
+
+                <div style={{ padding: '0 21px 6px' }}>
+                  <div className="subtabs" style={{ marginBottom: 12, paddingBottom: 0 }}>
+                    <button
+                      className={shapView === 'simulated' ? 'selected' : ''}
+                      onClick={() => setShapView('simulated')}
+                    >
+                      Simulated Contributors ({simResult.simulated_shap.length})
+                    </button>
+                    <button
+                      className={shapView === 'baseline' ? 'selected' : ''}
+                      onClick={() => setShapView('baseline')}
+                    >
+                      Baseline Contributors ({simResult.original_shap.length})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="shap-list">
+                  {(shapView === 'simulated' ? simResult.simulated_shap : simResult.original_shap).map(
+                    (item) => (
+                      <div key={item.feature}>
+                        <span>{item.feature.replaceAll('_', ' ')}</span>
+                        <span
+                          className={item.direction === 'increases_risk' ? 'negative' : 'positive'}
+                        >
+                          {item.direction === 'increases_risk' ? '+' : '−'}
+                          {item.magnitude.toFixed(3)}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+
+                <p className="micro-copy" style={{ padding: '0 21px 16px' }}>
+                  TreeSHAP values show feature attribution log-odds driving the XGBoost classifier under this scenario.
+                </p>
+              </>
+            ) : (
+              <Empty
+                icon={SlidersHorizontal}
+                title="Run a scenario simulation"
+                detail="Adjust revenue, expenses, or receivable days on the left and run the simulation to see stress score shifts and TreeSHAP attribution."
+              />
+            )}
+          </Panel>
+        </div>
+      ) : (
+        <div className="two-columns">
+          <Panel title="Explore the original finance model" eyebrow="EXPERIMENTAL">
+            <div className="form-stack">
+              <label>
+                Sample monthly revenue (USD)
+                <input
+                  type="number"
+                  min="0"
+                  value={revenue}
+                  onChange={(e) => setRevenue(Number(e.target.value))}
+                />
+              </label>
+              <label>
+                Sample operating expenditure (USD)
+                <input
+                  type="number"
+                  min="0"
+                  value={opex}
+                  onChange={(e) => setOpex(Number(e.target.value))}
+                />
+              </label>
+            </div>
+            <p className="micro-copy">
+              Other inputs use the model's documented default sample profile. This does not fill
+              missing data in your workspace.
+            </p>
+            {error && <ErrorBox>{error}</ErrorBox>}
+            <button className="button secondary" disabled={busy} onClick={runSingle}>
+              {busy ? (
+                <Spinner />
+              ) : (
+                <>
+                  <Play size={14} />
+                  Run sample profile
+                </>
+              )}
+            </button>
+          </Panel>
+          <Panel title="Model output & contributors" eyebrow="NATIVE TREESHAP">
+            {result ? (
+              <>
+                <div className="lab-score">
+                  <strong>
+                    {(result.risk_probability * 100).toFixed(1)}
+                    <small>/100</small>
+                  </strong>
+                  <Badge tone="brass">Experimental score</Badge>
+                </div>
+                <div className="shap-list">
+                  {result.shap_features.map((item) => (
+                    <div key={item.feature}>
+                      <span>{item.feature.replaceAll('_', ' ')}</span>
+                      <span className={item.direction === 'increases_risk' ? 'negative' : 'positive'}>
+                        {item.direction === 'increases_risk' ? '+' : '−'}
+                        {item.magnitude.toFixed(3)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="micro-copy">
+                  Contributions are in log-odds. They explain the model, and do not establish causal
+                  effects.
+                </p>
+              </>
+            ) : (
+              <Empty
+                icon={SlidersHorizontal}
+                title="Inspect a sample prediction"
+                detail="Run the sample profile to examine the score and the features behind it."
+              />
+            )}
+          </Panel>
+        </div>
+      )}
     </>
   );
 }

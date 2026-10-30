@@ -343,10 +343,6 @@ export default function App({
               <span className="experimental-dot" />
             </a>
           )}
-          <button className="nav-item" onClick={() => setHelp(true)}>
-            <CircleHelp size={18} strokeWidth={1.5} />
-            Sources & methodology
-          </button>
         </div>
         <div className="sidebar-bottom">
           <div className="local-status">

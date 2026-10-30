@@ -4276,3 +4276,78 @@ tbody tr:hover {
     justify-content: center;
   }
 }
+
+/* What-If Simulation Styles */
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.slider-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #d2c297;
+  background: rgba(210, 194, 151, 0.1);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.sim-controls-section {
+  border-top: 1px solid #374e2c;
+  padding-top: 14px;
+  margin-top: 10px;
+}
+.sim-controls-section > .eyebrow {
+  margin-bottom: 12px;
+  display: block;
+}
+.sim-comparison-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 21px 18px;
+  flex-wrap: wrap;
+}
+.sim-score-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sim-score-box > .eyebrow {
+  font-size: 10px;
+  color: #9fb78a;
+  letter-spacing: 0.5px;
+}
+.sim-score-val {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -1px;
+}
+.sim-score-box.highlight .sim-score-val {
+  color: #d2c297;
+}
+.sim-summary-box {
+  margin: 0 21px 18px;
+  padding: 12px 16px;
+  background: rgba(55, 78, 44, 0.35);
+  border: 1px solid #374e2c;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d9e6d0;
+}
+.sim-summary-box.rose {
+  border-color: #6c493c;
+  background: rgba(108, 73, 60, 0.2);
+  color: #eed5ca;
+}
+.sim-summary-box.sage {
+  border-color: #466342;
+  background: rgba(70, 99, 66, 0.2);
+  color: #d1e2cb;
+}
+.sim-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
