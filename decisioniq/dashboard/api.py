@@ -23,6 +23,7 @@ from services.anomaly.api import LoginData
 from services.anomaly.predict import predict_login
 from services.phishing.api import EmailData
 from services.phishing.predict import detect_phishing
+from services.phishing.eml_parser import parse_eml_bytes
 
 router = APIRouter(prefix="/api", tags=["Dashboard"])
 Company = Annotated[dict, Depends(current_company)]
@@ -384,6 +385,90 @@ def analyze_email(body: EmailData, company: Company):
             connection,
         )
     return result
+
+
+@router.post("/security/email/upload")
+async def analyze_email_file(file: UploadFile, company: Company):
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Email file size exceeds 10MB limit.")
+    try:
+        parsed = parse_eml_bytes(contents)
+    except Exception as exc:
+        raise HTTPException(400, f"Could not parse email file: {exc}")
+
+    # Use extracted subject and body for classification
+    text_to_analyze = f"Subject: {parsed['subject']}\n\n{parsed['full_body']}".strip()
+    if not text_to_analyze:
+        text_to_analyze = parsed['subject'] or "No content"
+
+    result = detect_phishing(text_to_analyze)
+
+    # Calculate overall risk score factoring in headers
+    # E.g., if model says safe but SPF failed or display name spoofed, flag high risk
+    header_flags = []
+    if parsed["spf"] == "fail":
+        header_flags.append("SPF verification failed (sending IP not authorized)")
+    if parsed["dkim"] == "fail":
+        header_flags.append("DKIM signature verification failed")
+    if parsed["dmarc"] == "fail":
+        header_flags.append("DMARC alignment check failed")
+    if parsed["name_spoof"]:
+        header_flags.append("Display name brand spoofing detected")
+    if parsed["suspicious_links"]:
+        header_flags.append(f"{len(parsed['suspicious_links'])} deceptive hyperlink(s) detected")
+
+    adjusted_risk_score = result["risk_score"]
+    if header_flags:
+        adjusted_risk_score = max(adjusted_risk_score, 85 if parsed["name_spoof"] or parsed["suspicious_links"] else 70)
+    is_phishing_overall = result["is_phishing"] or bool(header_flags)
+
+    response_data = {
+        **result,
+        "is_phishing": is_phishing_overall,
+        "risk_score": adjusted_risk_score,
+        "parsed_metadata": {
+            "subject": parsed["subject"],
+            "from": parsed["from"],
+            "reply_to": parsed["reply_to"],
+            "date": parsed["date"],
+            "spf": parsed["spf"],
+            "dkim": parsed["dkim"],
+            "dmarc": parsed["dmarc"],
+            "name_spoof": parsed["name_spoof"],
+            "suspicious_links": parsed["suspicious_links"],
+            "attachments": parsed["attachments"],
+            "body_preview": parsed["body_preview"],
+            "header_flags": header_flags,
+        },
+    }
+
+    with store.connect() as connection:
+        connection.execute(
+            "INSERT INTO events VALUES (?,?,?,?,?,?)",
+            (
+                store.uid(),
+                company["id"],
+                "email",
+                store.stamp(),
+                json.dumps({
+                    "filename": file.filename,
+                    "characters": len(text_to_analyze),
+                    "source": ".eml file upload",
+                    "subject": parsed["subject"][:60],
+                }),
+                json.dumps({**response_data, "status": "available"}),
+            ),
+        )
+        store.activity(
+            company["id"],
+            "security",
+            f"Email file analyzed: {file.filename}",
+            "Phishing detected" if is_phishing_overall else "No phishing detected",
+            connection,
+        )
+
+    return response_data
 
 
 @router.post("/reminders/snooze")

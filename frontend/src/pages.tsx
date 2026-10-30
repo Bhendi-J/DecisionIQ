@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Activity,
+  AlertTriangle,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
@@ -12,6 +13,7 @@ import {
   Database,
   Download,
   FileSpreadsheet,
+  FileText,
   Fingerprint,
   FlaskConical,
   Info,
@@ -882,15 +884,34 @@ export function Security(props: Props) {
     location_difference: 0,
   });
   const [email, setEmail] = useState('');
+  const [emlFile, setEmlFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   async function analyze() {
     setBusy(true);
     setError('');
     setResult(null);
     try {
-      const value = await api<Record<string, unknown>>(
-        '/security/' + (tab === 'logins' ? 'login' : 'email'),
-        { method: 'POST', body: JSON.stringify(tab === 'logins' ? login : { text: email }) },
-      );
+      let value: Record<string, unknown>;
+      if (tab === 'logins') {
+        value = await api<Record<string, unknown>>('/security/login', {
+          method: 'POST',
+          body: JSON.stringify(login),
+        });
+      } else if (emlFile) {
+        const formData = new FormData();
+        formData.append('file', emlFile);
+        value = await api<Record<string, unknown>>('/security/email/upload', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        value = await api<Record<string, unknown>>('/security/email', {
+          method: 'POST',
+          body: JSON.stringify({ text: email }),
+        });
+      }
       setResult(value);
       await refresh();
       toast('Analysis completed');
@@ -899,6 +920,14 @@ export function Security(props: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleFileSelect(f: File | null) {
+    if (!f) return;
+    setEmlFile(f);
+    setEmail('');
+    setResult(null);
+    setError('');
   }
   return (
     <>
@@ -990,16 +1019,75 @@ export function Security(props: Props) {
             </div>
           ) : (
             <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".eml,.msg"
+                style={{ display: 'none' }}
+                onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
+              />
+              <div
+                className={`eml-dropzone ${dragging ? 'dragging' : ''} ${emlFile ? 'has-file' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  const f = e.dataTransfer.files[0];
+                  if (f) handleFileSelect(f);
+                }}
+              >
+                <div className="eml-dropzone-icon">
+                  <FileText size={20} />
+                </div>
+                <div className="eml-dropzone-text">
+                  {emlFile ? emlFile.name : 'Drop raw .eml or .msg file here'}
+                </div>
+                <div className="eml-dropzone-sub">
+                  {emlFile
+                    ? `${(emlFile.size / 1024).toFixed(1)} KB · click to replace`
+                    : 'or click to browse from Outlook / Apple Mail / Thunderbird'}
+                </div>
+              </div>
+
+              <div className="email-input-divider">OR PASTE EMAIL TEXT</div>
+
               <label className="email-label">
                 Email content
                 <textarea
                   value={email}
+                  disabled={Boolean(emlFile)}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Paste an email or message to analyze…"
+                  placeholder={
+                    emlFile
+                      ? `Using ${emlFile.name} (remove or clear file to paste text)`
+                      : 'Paste an email or message to analyze…'
+                  }
                   maxLength={100000}
-                  rows={8}
+                  rows={5}
                 />
               </label>
+
+              {emlFile && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                  <button
+                    className="button ghost"
+                    style={{ fontSize: 11, padding: '3px 8px' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmlFile(null);
+                      setResult(null);
+                    }}
+                  >
+                    Clear attached file
+                  </button>
+                </div>
+              )}
+
               {d.phishing_status !== 'ready' && (
                 <div className="notice">
                   <strong>Trained model required</strong>
@@ -1014,7 +1102,11 @@ export function Security(props: Props) {
           {error && <ErrorBox>{error}</ErrorBox>}
           <button
             className="button primary"
-            disabled={busy || (tab === 'email' && (!email.trim() || d.phishing_status !== 'ready'))}
+            disabled={
+              busy ||
+              (tab === 'email' && (!email.trim() && !emlFile)) ||
+              (tab === 'email' && d.phishing_status !== 'ready')
+            }
             onClick={analyze}
           >
             {busy ? (
@@ -1047,8 +1139,99 @@ export function Security(props: Props) {
               <p>
                 {tab === 'logins'
                   ? 'Transformed Isolation Forest score. This is not a calibrated probability of account compromise.'
-                  : 'Model score for this message only. An unflagged message can still be malicious.'}
+                  : 'Composite score considering DistilBERT semantic model and SPF/DKIM/DMARC headers.'}
               </p>
+
+              {Boolean(result.parsed_metadata && typeof result.parsed_metadata === 'object') && (
+                <div className="eml-metadata-card">
+                  <div className="eyebrow" style={{ color: '#aac590', marginBottom: 2 }}>
+                    FORENSIC HEADER & PAYLOAD ANALYSIS
+                  </div>
+
+                  {Boolean((result.parsed_metadata as any).header_flags?.length) && (
+                    <div className="eml-flags-box">
+                      <strong style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <AlertTriangle size={13} /> Security Warning Flags
+                      </strong>
+                      {((result.parsed_metadata as any).header_flags as string[]).map((flag: string, idx: number) => (
+                        <div key={idx}>• {flag}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="eml-meta-row">
+                    <span className="eml-meta-label">Subject</span>
+                    <span className="eml-meta-val">
+                      {String((result.parsed_metadata as any).subject || '(No subject)')}
+                    </span>
+                  </div>
+                  <div className="eml-meta-row">
+                    <span className="eml-meta-label">Sender</span>
+                    <span className="eml-meta-val">
+                      {String((result.parsed_metadata as any).from || '(Unknown)')}
+                      {Boolean((result.parsed_metadata as any).name_spoof) && (
+                        <span style={{ marginLeft: 6 }}>
+                          <Badge tone="rose">Spoofed</Badge>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {Boolean((result.parsed_metadata as any).reply_to) && (
+                    <div className="eml-meta-row">
+                      <span className="eml-meta-label">Reply-To</span>
+                      <span className="eml-meta-val">
+                        {String((result.parsed_metadata as any).reply_to)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="eml-meta-row">
+                    <span className="eml-meta-label">Auth Checks</span>
+                    <div className="eml-auth-pills">
+                      <span
+                        className={`eml-auth-pill ${String((result.parsed_metadata as any).spf)}`}
+                      >
+                        SPF: {String((result.parsed_metadata as any).spf).toUpperCase()}
+                      </span>
+                      <span
+                        className={`eml-auth-pill ${String((result.parsed_metadata as any).dkim)}`}
+                      >
+                        DKIM: {String((result.parsed_metadata as any).dkim).toUpperCase()}
+                      </span>
+                      <span
+                        className={`eml-auth-pill ${String((result.parsed_metadata as any).dmarc)}`}
+                      >
+                        DMARC: {String((result.parsed_metadata as any).dmarc).toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {Boolean((result.parsed_metadata as any).suspicious_links?.length) && (
+                    <div style={{ marginTop: 4 }}>
+                      <span className="eml-meta-label">Deceptive Links</span>
+                      <div className="eml-link-list">
+                        {((result.parsed_metadata as any).suspicious_links as any[]).map(
+                          (link: any, i: number) => (
+                            <div key={i} className="eml-link-item">
+                              <div>Visible: <strong>{String(link.display)}</strong></div>
+                              <div className="target">Target: {String(link.target)}</div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {Boolean((result.parsed_metadata as any).attachments?.length) && (
+                    <div className="eml-meta-row">
+                      <span className="eml-meta-label">Attachments</span>
+                      <span className="eml-meta-val">
+                        {((result.parsed_metadata as any).attachments as string[]).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </Panel>

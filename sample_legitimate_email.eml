@@ -1,0 +1,20 @@
+From: "GitHub Enterprise" <notifications@github.com>
+To: target.victim@company.com
+Subject: [Company/Main] Pull request #42 merged into main
+Date: Fri, 30 Oct 2026 14:10:00 +0000
+Message-ID: <pull-request-42.github.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Authentication-Results: mx.google.com; spf=pass (google.com: domain of notifications@github.com designates 192.30.252.0/22 as permitted sender); dkim=pass (signature ok); dmarc=pass
+
+Hi team,
+
+Pull request #42 (Release v1.2 updates) was merged by Alex into main.
+
+You can view the commit details and full diff directly on GitHub:
+https://github.com/company/repo/pull/42
+
+No further action is required. All automated test pipelines have passed.
+
+Best regards,
+The GitHub Team
