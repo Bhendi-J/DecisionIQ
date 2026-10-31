@@ -551,6 +551,216 @@ export function DataHub(props: Props) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [showAPI, setShowAPI] = useState(false);
+
+  // Cashflow Intelligence & What-If simulation state
+  const cfFileInputRef = useRef<HTMLInputElement>(null);
+  const [cfSector, setCfSector] = useState('Retail');
+  const [cfRevenue, setCfRevenue] = useState(50000);
+  const [cfOpex, setCfOpex] = useState(35000);
+  const [cfReceivables, setCfReceivables] = useState(45);
+  const [cfInventory, setCfInventory] = useState(30);
+  const [cfLoan, setCfLoan] = useState(20000);
+  const [cfOwnerInj, setCfOwnerInj] = useState(5000);
+  const [cfEmployees, setCfEmployees] = useState(10);
+  const [cfBusy, setCfBusy] = useState(false);
+  const [cfError, setCfError] = useState('');
+
+  const [cfRisk, setCfRisk] = useState<{
+    risk_probability: number;
+    risk_class: number;
+    shap_features: { feature: string; direction: string; magnitude: number }[];
+  } | null>(null);
+
+  const [cfForecast, setCfForecast] = useState<{
+    future: { ds: string; yhat: number; yhat_lower?: number; yhat_upper?: number }[];
+    historical: { ds: string; yhat: number }[];
+  } | null>(null);
+
+  const [cfRevChange, setCfRevChange] = useState(0);
+  const [cfExpChange, setCfExpChange] = useState(0);
+  const [cfRecChange, setCfRecChange] = useState(0);
+  const [cfLoanChange, setCfLoanChange] = useState(0);
+  const [cfSimResult, setCfSimResult] = useState<{
+    original_risk_score: number;
+    simulated_risk_score: number;
+    risk_score_delta: number;
+    summary_message: string;
+    simulated_shap: { feature: string; direction: string; magnitude: number }[];
+  } | null>(null);
+
+  async function runCashflowAnalysis(customInputs?: Partial<{
+    sector: string;
+    revenue: number;
+    opex: number;
+    receivables: number;
+    inventory: number;
+    loan: number;
+    ownerInj: number;
+    employees: number;
+  }>) {
+    setCfBusy(true);
+    setCfError('');
+    const input = {
+      sector: customInputs?.sector ?? cfSector,
+      revenue_usd: customInputs?.revenue ?? cfRevenue,
+      opex_usd: customInputs?.opex ?? cfOpex,
+      accounts_receivable_days: customInputs?.receivables ?? cfReceivables,
+      inventory_days: customInputs?.inventory ?? cfInventory,
+      loan_balance_usd: customInputs?.loan ?? cfLoan,
+      owner_injections_usd: customInputs?.ownerInj ?? cfOwnerInj,
+      employees: customInputs?.employees ?? cfEmployees,
+    };
+    try {
+      const [riskRes, fcastRes] = await Promise.all([
+        fetch('/finance/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+          body: JSON.stringify(input),
+        }),
+        fetch('/finance/forecast?horizon_days=90', {
+          headers: { ...csrfHeaders() },
+        }),
+      ]);
+      const riskData = await riskRes.json();
+      if (!riskRes.ok) throw new Error(riskData.detail || 'Risk model evaluation failed');
+      setCfRisk(riskData);
+
+      if (fcastRes.ok) {
+        const fcastData = await fcastRes.json();
+        setCfForecast(fcastData);
+      }
+      toast('Cashflow stress risk & forecast updated');
+    } catch (err) {
+      setCfError((err as Error).message);
+    } finally {
+      setCfBusy(false);
+    }
+  }
+
+  async function runCfSimulation(rev = cfRevChange, exp = cfExpChange, rec = cfRecChange, loan = cfLoanChange) {
+    setCfBusy(true);
+    setCfError('');
+    try {
+      const res = await fetch('/finance/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        body: JSON.stringify({
+          base_input: {
+            sector: cfSector,
+            revenue_usd: cfRevenue,
+            opex_usd: cfOpex,
+            accounts_receivable_days: cfReceivables,
+            inventory_days: cfInventory,
+            loan_balance_usd: cfLoan,
+            owner_injections_usd: cfOwnerInj,
+            employees: cfEmployees,
+          },
+          revenue_change_pct: rev,
+          expenses_change_pct: exp,
+          receivable_days_change: rec,
+          loan_balance_change_pct: loan,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Simulation failed');
+      setCfSimResult(data);
+    } catch (err) {
+      setCfError((err as Error).message);
+    } finally {
+      setCfBusy(false);
+    }
+  }
+
+  function handleCashflowCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        if (!text) return;
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length < 2) throw new Error('CSV must contain a header row and data rows.');
+        const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/['"]/g, ''));
+        
+        const revIdx = headers.findIndex((h) => h.includes('rev') || h.includes('sales') || h.includes('inflow'));
+        const opexIdx = headers.findIndex((h) => h.includes('opex') || h.includes('exp') || h.includes('outflow') || h.includes('cost'));
+        const arIdx = headers.findIndex((h) => h.includes('receiv') || h.includes('ar_day') || h.includes('debtor'));
+        const invIdx = headers.findIndex((h) => h.includes('invent') || h.includes('stock'));
+        const loanIdx = headers.findIndex((h) => h.includes('loan') || h.includes('debt') || h.includes('liab'));
+        const injIdx = headers.findIndex((h) => h.includes('inject') || h.includes('cap') || h.includes('equity'));
+        const empIdx = headers.findIndex((h) => h.includes('emp') || h.includes('headcount'));
+        const secIdx = headers.findIndex((h) => h.includes('sec') || h.includes('indus'));
+
+        let totalRev = 0, totalOpex = 0, totalAR = 0, totalInv = 0, totalLoan = 0, totalInj = 0, totalEmp = 0;
+        let count = 0;
+        let detectedSector = 'Retail';
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map((c) => c.trim().replace(/['"]/g, ''));
+          if (cols.length < 2) continue;
+          if (revIdx >= 0 && !isNaN(Number(cols[revIdx]))) totalRev += Number(cols[revIdx]);
+          if (opexIdx >= 0 && !isNaN(Number(cols[opexIdx]))) totalOpex += Number(cols[opexIdx]);
+          if (arIdx >= 0 && !isNaN(Number(cols[arIdx]))) totalAR += Number(cols[arIdx]);
+          if (invIdx >= 0 && !isNaN(Number(cols[invIdx]))) totalInv += Number(cols[invIdx]);
+          if (loanIdx >= 0 && !isNaN(Number(cols[loanIdx]))) totalLoan += Number(cols[loanIdx]);
+          if (injIdx >= 0 && !isNaN(Number(cols[injIdx]))) totalInj += Number(cols[injIdx]);
+          if (empIdx >= 0 && !isNaN(Number(cols[empIdx]))) totalEmp += Number(cols[empIdx]);
+          if (secIdx >= 0 && cols[secIdx]) {
+            const sec = cols[secIdx].charAt(0).toUpperCase() + cols[secIdx].slice(1).toLowerCase();
+            if (['Retail', 'Wholesale', 'Services', 'Manufacturing', 'Technology', 'Healthcare', 'Construction', 'Transportation', 'Hospitality', 'Finance'].includes(sec)) {
+              detectedSector = sec;
+            }
+          }
+          count++;
+        }
+
+        if (count === 0) throw new Error('No valid numeric rows parsed from CSV.');
+
+        const isDaily = count >= 20;
+        const newRev = Math.round(isDaily ? (totalRev / count) * 30 : totalRev / (count > 1 ? count : 1));
+        const newOpex = Math.round(isDaily ? (totalOpex / count) * 30 : (totalOpex > 0 ? totalOpex / (count > 1 ? count : 1) : newRev * 0.7));
+        const newAR = Math.round(arIdx >= 0 ? totalAR / count : 45);
+        const newInv = Math.round(invIdx >= 0 ? totalInv / count : 30);
+        const newLoan = Math.round(loanIdx >= 0 ? totalLoan / count : 20000);
+        const newInj = Math.round(injIdx >= 0 ? totalInj / count : 5000);
+        const newEmp = Math.round(empIdx >= 0 ? totalEmp / count : 10);
+
+        setCfSector(detectedSector);
+        setCfRevenue(newRev || 50000);
+        setCfOpex(newOpex || 35000);
+        setCfReceivables(newAR || 45);
+        setCfInventory(newInv || 30);
+        setCfLoan(newLoan || 20000);
+        setCfOwnerInj(newInj || 5000);
+        setCfEmployees(newEmp || 10);
+
+        toast(`Loaded ${count} records from ${file.name}`);
+        void runCashflowAnalysis({
+          sector: detectedSector,
+          revenue: newRev || 50000,
+          opex: newOpex || 35000,
+          receivables: newAR || 45,
+          inventory: newInv || 30,
+          loan: newLoan || 20000,
+          ownerInj: newInj || 5000,
+          employees: newEmp || 10,
+        });
+      } catch (err) {
+        setCfError(`CSV parse error: ${(err as Error).message}`);
+      }
+    };
+    reader.readAsText(file);
+    if (cfFileInputRef.current) cfFileInputRef.current.value = '';
+  }
+
+  function resetCfShifts() {
+    setCfRevChange(0);
+    setCfExpChange(0);
+    setCfRecChange(0);
+    setCfLoanChange(0);
+    void runCfSimulation(0, 0, 0, 0);
+  }
   async function changeState(state: Company['api_state']) {
     setBusy(true);
     setError('');
@@ -820,6 +1030,432 @@ export function DataHub(props: Props) {
           />
         )}
       </Panel>
+      <Panel
+        title="Cashflow Intelligence & Stress Risk"
+        eyebrow="FINANCIAL HEALTH · CASHFLOW FORECAST, RISK SCORING & WHAT-IF SIMULATION"
+        action={
+          <div className="button-row">
+            <input
+              ref={cfFileInputRef}
+              type="file"
+              accept=".csv"
+              style={{ display: 'none' }}
+              onChange={handleCashflowCsvUpload}
+            />
+            <button className="button compact secondary" onClick={() => cfFileInputRef.current?.click()}>
+              <Upload size={14} />
+              Upload Cashflow CSV
+            </button>
+            <button
+              className="button compact ghost"
+              onClick={() => {
+                setCfSector('Retail');
+                setCfRevenue(50000);
+                setCfOpex(35000);
+                setCfReceivables(45);
+                setCfInventory(30);
+                setCfLoan(20000);
+                setCfOwnerInj(5000);
+                setCfEmployees(10);
+                void runCashflowAnalysis({
+                  sector: 'Retail',
+                  revenue: 50000,
+                  opex: 35000,
+                  receivables: 45,
+                  inventory: 30,
+                  loan: 20000,
+                  ownerInj: 5000,
+                  employees: 10,
+                });
+              }}
+            >
+              <RotateCcw size={14} />
+              SME Benchmark
+            </button>
+            <button
+              className="button compact ghost"
+              onClick={() => {
+                setCfSector('Retail');
+                setCfRevenue(32000);
+                setCfOpex(39000);
+                setCfReceivables(75);
+                setCfInventory(45);
+                setCfLoan(48000);
+                setCfOwnerInj(0);
+                setCfEmployees(8);
+                void runCashflowAnalysis({
+                  sector: 'Retail',
+                  revenue: 32000,
+                  opex: 39000,
+                  receivables: 75,
+                  inventory: 45,
+                  loan: 48000,
+                  ownerInj: 0,
+                  employees: 8,
+                });
+              }}
+            >
+              <AlertTriangle size={14} />
+              High Stress Test
+            </button>
+          </div>
+        }
+      >
+        <p className="body-small">
+          Evaluate company financial stress risk using trained XGBoost and TreeSHAP explainability, forecast 90-day cashflow liquidity, and run What-If simulations on operating scenarios.
+        </p>
+
+        {cfError && <ErrorBox>{cfError}</ErrorBox>}
+
+        <div className="form-stack" style={{ marginTop: 12 }}>
+          <span className="eyebrow">FINANCIAL PARAMETERS & PROFILE</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <label>
+              Monthly Revenue (USD)
+              <input
+                type="number"
+                min="0"
+                value={cfRevenue}
+                onChange={(e) => setCfRevenue(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Operating Expenses / OPEX (USD)
+              <input
+                type="number"
+                min="0"
+                value={cfOpex}
+                onChange={(e) => setCfOpex(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Receivable Days (DSO)
+              <input
+                type="number"
+                min="0"
+                value={cfReceivables}
+                onChange={(e) => setCfReceivables(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Inventory Days (DSI)
+              <input
+                type="number"
+                min="0"
+                value={cfInventory}
+                onChange={(e) => setCfInventory(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Loan Balance (USD)
+              <input
+                type="number"
+                min="0"
+                value={cfLoan}
+                onChange={(e) => setCfLoan(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Owner Capital Injections (USD)
+              <input
+                type="number"
+                min="0"
+                value={cfOwnerInj}
+                onChange={(e) => setCfOwnerInj(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Sector
+              <select value={cfSector} onChange={(e) => setCfSector(e.target.value)}>
+                {['Retail', 'Wholesale', 'Services', 'Manufacturing', 'Technology', 'Healthcare', 'Construction', 'Transportation', 'Hospitality', 'Finance'].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+            <button
+              className="button primary"
+              disabled={cfBusy}
+              onClick={() => runCashflowAnalysis()}
+            >
+              {cfBusy ? <Spinner label="Evaluating models" /> : (
+                <>
+                  <Play size={14} />
+                  Evaluate Cashflow Risk & Forecast
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Model Results */}
+        <div className="two-columns" style={{ marginTop: 20 }}>
+          {/* Risk & SHAP Card */}
+          <div style={{ border: '1px solid #374e2c', borderRadius: 6, padding: 16, background: '#182115' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span className="eyebrow">XGBOOST STRESS RISK & SHAP</span>
+              {cfRisk ? (
+                <Badge tone={cfRisk.risk_probability > 0.6 ? 'rose' : cfRisk.risk_probability > 0.35 ? 'brass' : 'sage'}>
+                  {cfRisk.risk_probability > 0.6 ? 'High Stress Risk' : cfRisk.risk_probability > 0.35 ? 'Moderate Risk' : 'Healthy Profile'}
+                </Badge>
+              ) : (
+                <Badge tone="neutral">Ready to run</Badge>
+              )}
+            </div>
+
+            {cfRisk ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, margin: '8px 0 16px' }}>
+                  <strong style={{ fontSize: 32, letterSpacing: '-0.5px' }}>
+                    {(cfRisk.risk_probability * 100).toFixed(1)}%
+                  </strong>
+                  <span className="muted" style={{ fontSize: 11 }}>probability of cashflow distress</span>
+                </div>
+
+                <div className="eyebrow" style={{ marginTop: 14, marginBottom: 8 }}>
+                  TREESHAP TOP RISK DRIVERS
+                </div>
+                <div className="shap-list">
+                  {cfRisk.shap_features.map((item) => (
+                    <div key={item.feature} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #283720' }}>
+                      <span style={{ fontSize: 12 }}>{item.feature.replaceAll('_', ' ')}</span>
+                      <span
+                        className={item.direction === 'increases_risk' ? 'negative' : 'positive'}
+                        style={{ fontFamily: 'var(--mono)', fontSize: 11 }}
+                      >
+                        {item.direction === 'increases_risk' ? '+' : '−'}
+                        {item.magnitude.toFixed(3)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <Empty
+                icon={Activity}
+                title="Stress Risk Score"
+                detail="Click 'Evaluate Cashflow Risk' or 'SME Benchmark' to run XGBoost stress evaluation and TreeSHAP attribution."
+              />
+            )}
+          </div>
+
+          {/* Forecast Card */}
+          <div style={{ border: '1px solid #374e2c', borderRadius: 6, padding: 16, background: '#182115' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span className="eyebrow">90-DAY CASHFLOW FORECAST</span>
+              <Badge tone="sage">Prophet Liquidity Outlook</Badge>
+            </div>
+
+            {cfForecast && cfForecast.future?.length ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, margin: '8px 0 16px' }}>
+                  <div>
+                    <span className="muted" style={{ fontSize: 10, display: 'block' }}>PROJECTED 90-DAY INFLOW</span>
+                    <strong style={{ fontSize: 20, color: '#e1dcc5' }}>
+                      ${number(Math.round(cfForecast.future.reduce((acc, p) => acc + (p.yhat || 0), 0)))}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="muted" style={{ fontSize: 10, display: 'block' }}>DAILY EXPECTED INFLOW</span>
+                    <strong style={{ fontSize: 20, color: '#e1dcc5' }}>
+                      ${number(Math.round(cfForecast.future.reduce((acc, p) => acc + (p.yhat || 0), 0) / cfForecast.future.length))}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="table-scroll" style={{ maxHeight: 180, overflowY: 'auto' }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th className="numeric">Expected</th>
+                        <th className="numeric">Lower Bound</th>
+                        <th className="numeric">Upper Bound</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cfForecast.future.slice(0, 10).map((row) => (
+                        <tr key={row.ds}>
+                          <td>{shortDate(row.ds, true)}</td>
+                          <td className="numeric">${number(Math.round(row.yhat))}</td>
+                          <td className="numeric muted">${number(Math.round(row.yhat_lower || row.yhat * 0.85))}</td>
+                          <td className="numeric muted">${number(Math.round(row.yhat_upper || row.yhat * 1.15))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="micro-copy" style={{ marginTop: 8 }}>
+                  Showing first 10 days of the 90-day projected liquidity horizon.
+                </p>
+              </>
+            ) : (
+              <Empty
+                icon={CalendarDays}
+                title="90-Day Cashflow Outlook"
+                detail="Evaluated cashflow horizon based on trained time-series seasonal patterns."
+              />
+            )}
+          </div>
+        </div>
+
+        {/* What-If Simulation Section */}
+        <div style={{ marginTop: 24, padding: 18, border: '1px solid #435b36', borderRadius: 7, background: '#1c2619' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div>
+              <span className="eyebrow">INTERACTIVE WHAT-IF SCENARIO MODELING</span>
+              <h3 style={{ margin: '4px 0 0', fontSize: 16 }}>Test Stress Mitigation Strategies</h3>
+            </div>
+            <button className="button compact ghost" onClick={resetCfShifts}>
+              <RotateCcw size={13} />
+              Reset Sliders
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            <label>
+              <div className="slider-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                <span>Revenue Adjustment</span>
+                <b style={{ fontFamily: 'var(--mono)' }}>{cfRevChange > 0 ? `+${cfRevChange}%` : `${cfRevChange}%`}</b>
+              </div>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={cfRevChange}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setCfRevChange(val);
+                  void runCfSimulation(val, cfExpChange, cfRecChange, cfLoanChange);
+                }}
+              />
+            </label>
+
+            <label>
+              <div className="slider-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                <span>OPEX Adjustment</span>
+                <b style={{ fontFamily: 'var(--mono)' }}>{cfExpChange > 0 ? `+${cfExpChange}%` : `${cfExpChange}%`}</b>
+              </div>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={cfExpChange}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setCfExpChange(val);
+                  void runCfSimulation(cfRevChange, val, cfRecChange, cfLoanChange);
+                }}
+              />
+            </label>
+
+            <label>
+              <div className="slider-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                <span>Receivable Days Shift</span>
+                <b style={{ fontFamily: 'var(--mono)' }}>{cfRecChange > 0 ? `+${cfRecChange}d` : `${cfRecChange}d`}</b>
+              </div>
+              <input
+                type="range"
+                min="-30"
+                max="60"
+                step="1"
+                value={cfRecChange}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setCfRecChange(val);
+                  void runCfSimulation(cfRevChange, cfExpChange, val, cfLoanChange);
+                }}
+              />
+            </label>
+
+            <label>
+              <div className="slider-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                <span>Loan Balance Adjustment</span>
+                <b style={{ fontFamily: 'var(--mono)' }}>{cfLoanChange > 0 ? `+${cfLoanChange}%` : `${cfLoanChange}%`}</b>
+              </div>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={cfLoanChange}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setCfLoanChange(val);
+                  void runCfSimulation(cfRevChange, cfExpChange, cfRecChange, val);
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Simulation Output Card */}
+          {cfSimResult ? (
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #334628' }}>
+              <div className="sim-comparison-bar" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div className="sim-score-box">
+                  <span className="eyebrow">BASELINE RISK</span>
+                  <div className="sim-score-val" style={{ fontSize: 22, fontWeight: 600 }}>
+                    {(cfSimResult.original_risk_score * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <ArrowRight size={20} style={{ opacity: 0.6 }} />
+                <div className="sim-score-box highlight">
+                  <span className="eyebrow">SIMULATED RISK</span>
+                  <div className="sim-score-val" style={{ fontSize: 22, fontWeight: 600 }}>
+                    {(cfSimResult.simulated_risk_score * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div style={{ marginLeft: 'auto' }}>
+                  <Badge
+                    tone={
+                      cfSimResult.risk_score_delta > 0.005
+                        ? 'rose'
+                        : cfSimResult.risk_score_delta < -0.005
+                        ? 'sage'
+                        : 'neutral'
+                    }
+                  >
+                    {cfSimResult.risk_score_delta > 0
+                      ? `+${(cfSimResult.risk_score_delta * 100).toFixed(1)}% risk`
+                      : `${(cfSimResult.risk_score_delta * 100).toFixed(1)}% risk`}
+                  </Badge>
+                </div>
+              </div>
+
+              <div
+                className={`sim-summary-box ${
+                  cfSimResult.risk_score_delta > 0.05
+                    ? 'rose'
+                    : cfSimResult.risk_score_delta < -0.05
+                    ? 'sage'
+                    : ''
+                }`}
+                style={{ marginTop: 12, padding: 10, borderRadius: 5, background: '#24321f', fontSize: 12 }}
+              >
+                <strong>Outcome:</strong> {cfSimResult.summary_message}
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                className="button secondary"
+                disabled={cfBusy}
+                onClick={() => runCfSimulation()}
+              >
+                <SlidersHorizontal size={14} />
+                Run What-If Simulation
+              </button>
+              <span className="muted" style={{ fontSize: 11 }}>
+                Move any slider above or click to compute the simulated risk impact.
+              </span>
+            </div>
+          )}
+        </div>
+      </Panel>
       <div className="two-columns">
         <Panel title="What your data can tell you">
           <ul className="capability-list">
@@ -836,8 +1472,8 @@ export function DataHub(props: Props) {
               Evaluated forecasts, when history supports them
             </li>
             <li>
-              <Info size={15} />
-              Cash flow and profit need additional source records
+              <Check size={15} />
+              Cashflow stress risk & What-If scenario simulation enabled
             </li>
           </ul>
         </Panel>

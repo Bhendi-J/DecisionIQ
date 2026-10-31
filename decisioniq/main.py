@@ -19,7 +19,7 @@ from services.phishing.api import router as phishing_router
 from services.phishing.predict import _load_bundle
 from decisioniq.config import ROOT
 from decisioniq.dashboard.api import router as dashboard_router
-from decisioniq.dashboard.auth import router as accounts_router, require_admin
+from decisioniq.dashboard.auth import router as accounts_router, require_admin, current_user
 from decisioniq.dashboard import store as dashboard_store
 from decisioniq.dashboard.analytics import get_forecast, refresh_forecast
 from decisioniq.dashboard.reminders import run_scheduler, evaluate_reminders
@@ -107,7 +107,7 @@ def ready():
     return JSONResponse(status_code=200 if available else 503, content={"models": models})
 
 
-app.include_router(finance_router, dependencies=[Depends(require_admin)])
+app.include_router(finance_router, dependencies=[Depends(current_user)])
 app.include_router(anomaly_router, dependencies=[Depends(require_admin)])
 app.include_router(phishing_router, dependencies=[Depends(require_admin)])
 app.include_router(assessment_router, dependencies=[Depends(require_admin)])
